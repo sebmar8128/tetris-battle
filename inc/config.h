@@ -32,3 +32,20 @@ static constexpr uint32_t QLEN_STORAGE_RESPONSES = 8;
 // Timing (frame rendering roughly 60 Hz)
 static constexpr TickType_t WIRELESS_HEARTBEAT_PERIOD_TICKS = pdMS_TO_TICKS(200);
 static constexpr TickType_t RENDER_FRAME_PERIOD_TICKS       = pdMS_TO_TICKS(16);
+
+// Input timing
+static constexpr TickType_t INPUT_POLL_PERIOD_TICKS   = pdMS_TO_TICKS(5);
+static constexpr uint32_t INPUT_DEBOUNCE_MS           = 25;
+static constexpr uint32_t INPUT_HOLD_DETECT_MS        = 250;
+static constexpr uint32_t INPUT_REPEAT_PERIOD_MS      = 40;
+
+// Button GPIOs. Assumption is INPUT_PULLUP.
+static constexpr int8_t PIN_BUTTON_LD_UP    = 4;
+static constexpr int8_t PIN_BUTTON_LD_LEFT  = 5;
+static constexpr int8_t PIN_BUTTON_LD_RIGHT = 6;
+static constexpr int8_t PIN_BUTTON_LD_DOWN  = 7;
+static constexpr int8_t PIN_BUTTON_RD_UP    = 15;
+static constexpr int8_t PIN_BUTTON_RD_LEFT  = 16;
+static constexpr int8_t PIN_BUTTON_RD_RIGHT = 17;
+static constexpr int8_t PIN_BUTTON_RD_DOWN  = 18;
+static constexpr int8_t PIN_BUTTON_CENTER   = 21;
