@@ -2,18 +2,9 @@
 
 #include <Arduino.h>
 
-// InputTask -> GameTask
+#include "types.h"
 
-enum class InputAction : uint8_t {
-    MoveLeft,
-    MoveRight,
-    SoftDrop,
-    HardDrop,
-    RotateCW,
-    RotateCCW,
-    Hold,
-    Pause
-};
+// InputTask -> GameTask
 
 enum class InputEventType : uint8_t {
     Press,
@@ -22,62 +13,172 @@ enum class InputEventType : uint8_t {
 };
 
 struct InputEvent {
-    InputAction action;
+    PhysicalButton button;
     InputEventType type;
+    uint32_t tickMs;
 };
 
 
-// WirelessTask -> GameTask
+// WirelessTask <-> GameTask
 
-enum class RemoteEvent : uint8_t {
-    PacketReceived,
-    SendComplete,
-    PeerTimeout
-};
-
-
-// GameTask -> WirelessTask
-
-enum class OutboundMessage : uint8_t {
-    GameStart,
-    Input,
+enum class PacketType : uint8_t {
+    LobbyState,
+    StartGameRequest,
+    StartGameReply,
     Pause,
-    ResumeRequest,
-    ResumeConfirm,
-    RestartRequest,
-    RestartConfirm,
-    QuitRequest,
-    QuitConfirm,
-    Garbage
+    PauseActionRequest,
+    PauseActionReply,
+    Garbage,
+    GameOver
+};
+
+struct LobbyStatePacket {
+    char username[MAX_USERNAME_LEN + 1];
+    bool ready;
+};
+
+struct StartGameRequestPacket {
+    uint8_t requestId;
+    uint32_t seed;
+    MatchSettings settings;
+};
+
+struct StartGameReplyPacket {
+    uint8_t requestId;
+    bool accepted;
+};
+
+struct PausePacket {
+    uint8_t pauseId;
+};
+
+struct PauseActionRequestPacket {
+    uint8_t pauseId;
+    uint8_t requestId;
+    PauseMenuAction action;
+};
+
+struct PauseActionReplyPacket {
+    uint8_t pauseId;
+    uint8_t requestId;
+    PauseMenuAction action;
+    bool accepted;
+};
+
+struct GarbagePacket {
+    uint8_t lines;
+    uint8_t holeColumn;
+};
+
+struct GameOverPacket {
+    GameOverReason reason;
+    uint32_t finalScore;
+    uint16_t linesCleared;
+};
+
+struct NetPacket {
+    PacketType type;
+    union {
+        LobbyStatePacket lobbyState;
+        StartGameRequestPacket startGameRequest;
+        StartGameReplyPacket startGameReply;
+        PausePacket pause;
+        PauseActionRequestPacket pauseActionRequest;
+        PauseActionReplyPacket pauseActionReply;
+        GarbagePacket garbage;
+        GameOverPacket gameOver;
+    } payload;
+};
+
+enum class RemoteEventType : uint8_t {
+    PacketReceived,
+    PeerConnected,
+    PeerDisconnected
+};
+
+struct RemoteEvent {
+    RemoteEventType type;
+    uint8_t peerAddress[ESPNOW_PEER_ADDR_LEN];
+    NetPacket packet;
 };
 
 
 // GameTask -> RenderTask
 
-enum class RenderCommand : uint8_t {
-    FullRedraw,
-    DrawMenu,
-    DrawBoard,
-    DrawPauseScreen,
-    DrawGameOver
+enum class RenderScreen : uint8_t {
+    Lobby,
+    Gameplay,
+    Paused,
+    GameOver
+};
+
+struct LobbyRenderState {
+    char localUsername[MAX_USERNAME_LEN + 1];
+    char remoteUsername[MAX_USERNAME_LEN + 1];
+    bool localReady;
+    bool remoteReady;
+};
+
+struct GameplayRenderState {
+    PlayerRenderState player;
+};
+
+struct PauseRenderState {
+    PlayerRenderState player;
+    bool isPauseOwner;
+    bool showPauseMenu;
+};
+
+struct GameOverRenderState {
+    PlayerRenderState player;
+    GameOverReason reason;
+};
+
+struct RenderEvent {
+    RenderScreen screen;
+    union {
+        LobbyRenderState lobby;
+        GameplayRenderState gameplay;
+        PauseRenderState pause;
+        GameOverRenderState gameOver;
+    } payload;
 };
 
 
-// GameTask -> StorageTask
+// GameTask <-> StorageTask
 
-enum class StorageRequest : uint8_t {
-    LoadUserSettings,
-    SaveUserSettings,
-    LoadPairSettings,
-    SavePairSettings
+enum class StorageKey : uint8_t {
+    UserSettings,
+    MatchSettings
 };
 
+enum class StorageOperation : uint8_t {
+    Load,
+    Save
+};
 
-// StorageTask -> GameTask
+struct StorageRequest {
+    StorageOperation operation;
+    StorageKey key;
+    char localUsername[MAX_USERNAME_LEN + 1];
+    char remoteUsername[MAX_USERNAME_LEN + 1];
+    union {
+        UserSettings userSettings;
+        MatchSettings matchSettings;
+    } payload;
+};
 
-enum class StorageResponse : uint8_t {
-    LoadSuccess,
-    LoadNotFound,
-    SaveSuccess,
-    SaveFailed
+enum class StorageStatus : uint8_t {
+    Success,
+    NotFound,
+    Failed
+};
+
+struct StorageResponse {
+    StorageStatus status;
+    StorageKey key;
+    union {
+        UserSettings userSettings;
+        MatchSettings matchSettings;
+    } payload;
 };

@@ -3,8 +3,8 @@
 
 QueueHandle_t g_inputEventQueue       = nullptr;
 QueueHandle_t g_remoteEventQueue      = nullptr;
-QueueHandle_t g_outboundMessageQueue  = nullptr;
-QueueHandle_t g_renderCommandQueue    = nullptr;
+QueueHandle_t g_outboundPacketQueue   = nullptr;
+QueueHandle_t g_renderEventQueue      = nullptr;
 QueueHandle_t g_storageRequestQueue   = nullptr;
 QueueHandle_t g_storageResponseQueue  = nullptr;
 
@@ -19,14 +19,14 @@ bool initQueues() {
         sizeof(RemoteEvent)
     );
 
-    g_outboundMessageQueue = xQueueCreate(
-        QLEN_OUTBOUND_MESSAGES,
-        sizeof(OutboundMessage)
+    g_outboundPacketQueue = xQueueCreate(
+        QLEN_OUTBOUND_PACKETS,
+        sizeof(NetPacket)
     );
 
-    g_renderCommandQueue = xQueueCreate(
-        QLEN_RENDER_COMMANDS,
-        sizeof(RenderCommand)
+    g_renderEventQueue = xQueueCreate(
+        QLEN_RENDER_EVENTS,
+        sizeof(RenderEvent)
     );
 
     g_storageRequestQueue = xQueueCreate(
@@ -41,8 +41,8 @@ bool initQueues() {
 
     return g_inputEventQueue &&
            g_remoteEventQueue &&
-           g_outboundMessageQueue &&
-           g_renderCommandQueue &&
+           g_outboundPacketQueue &&
+           g_renderEventQueue &&
            g_storageRequestQueue &&
            g_storageResponseQueue;
 }

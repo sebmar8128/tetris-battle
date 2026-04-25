@@ -5,8 +5,8 @@
 
 extern QueueHandle_t g_inputEventQueue;
 extern QueueHandle_t g_remoteEventQueue;
-extern QueueHandle_t g_outboundMessageQueue;
-extern QueueHandle_t g_renderCommandQueue;
+extern QueueHandle_t g_outboundPacketQueue;
+extern QueueHandle_t g_renderEventQueue;
 extern QueueHandle_t g_storageRequestQueue;
 extern QueueHandle_t g_storageResponseQueue;
 
