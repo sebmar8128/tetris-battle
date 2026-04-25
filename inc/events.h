@@ -112,6 +112,18 @@ enum class RenderScreen : uint8_t {
     GameOver
 };
 
+enum class RenderEventType : uint8_t {
+    Config,
+    Screen
+};
+
+struct DisplayRenderConfig {
+    ThemeId theme;
+    bool holdEnabled;
+    bool ghostEnabled;
+    uint8_t nextPreviewCount;
+};
+
 struct LobbyRenderState {
     char localUsername[MAX_USERNAME_LEN + 1];
     char remoteUsername[MAX_USERNAME_LEN + 1];
@@ -134,13 +146,21 @@ struct GameOverRenderState {
     GameOverReason reason;
 };
 
-struct RenderEvent {
+struct ScreenRenderState {
     RenderScreen screen;
     union {
         LobbyRenderState lobby;
         GameplayRenderState gameplay;
         PauseRenderState pause;
         GameOverRenderState gameOver;
+    } payload;
+};
+
+struct RenderEvent {
+    RenderEventType type;
+    union {
+        DisplayRenderConfig config;
+        ScreenRenderState screen;
     } payload;
 };
 

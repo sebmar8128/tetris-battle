@@ -21,7 +21,7 @@ enum class PhysicalButton : uint8_t {
 };
 
 enum class ThemeId : uint8_t {
-    Original,
+    Gameboy,
     Nintendo,
     Modern
 };

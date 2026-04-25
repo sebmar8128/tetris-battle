@@ -1,11 +1,14 @@
 #include <Arduino.h>
 
 #include "config.h"
+#include "display.h"
 #include "queues.h"
 #include "tasks.h"
 
 void renderTask(void* pvParameters) {
     (void)pvParameters;
+
+    Display::begin();
 
     RenderEvent renderEvent;
     TickType_t lastRenderTick = xTaskGetTickCount();
@@ -19,8 +22,12 @@ void renderTask(void* pvParameters) {
                 vTaskDelay(RENDER_FRAME_PERIOD_TICKS - elapsed);
             }
 
-            // Push the latest snapshot to the LCD here.
-            lastRenderTick = xTaskGetTickCount();
+            if (renderEvent.type == RenderEventType::Config) {
+                Display::configure(renderEvent.payload.config);
+            } else {
+                Display::renderScreen(renderEvent.payload.screen);
+                lastRenderTick = xTaskGetTickCount();
+            }
         }
     }
 }
