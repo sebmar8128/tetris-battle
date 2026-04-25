@@ -3,6 +3,12 @@
 #include "config.h"
 #include "tasks.h"
 
+TaskHandle_t g_wirelessTaskHandle = nullptr;
+TaskHandle_t g_inputTaskHandle    = nullptr;
+TaskHandle_t g_gameTaskHandle     = nullptr;
+TaskHandle_t g_renderTaskHandle   = nullptr;
+TaskHandle_t g_storageTaskHandle  = nullptr;
+
 bool createApplicationTasks() {
     BaseType_t ok;
 
