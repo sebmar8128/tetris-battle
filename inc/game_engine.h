@@ -30,8 +30,8 @@ struct Config {
 class Engine {
 public:
     void begin(const Config& config);
-    void tick(uint32_t nowMs);
-    void applyAction(Action action, uint32_t nowMs);
+    bool tick(uint32_t nowMs);
+    bool applyAction(Action action, uint32_t nowMs);
 
     bool isGameOver() const;
     GameOverReason gameOverReason() const;

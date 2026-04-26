@@ -91,18 +91,18 @@ void Engine::begin(const Config& config) {
     spawnNextPiece();
 }
 
-void Engine::tick(uint32_t nowMs) {
+bool Engine::tick(uint32_t nowMs) {
     if (gameOver_) {
-        return;
+        return false;
     }
 
     if (nextGravityMs_ == 0) {
         nextGravityMs_ = nowMs + gravityIntervalMs();
-        return;
+        return false;
     }
 
     if (static_cast<int32_t>(nowMs - nextGravityMs_) < 0) {
-        return;
+        return false;
     }
 
     if (!tryMove(0, 1)) {
@@ -110,48 +110,68 @@ void Engine::tick(uint32_t nowMs) {
     }
 
     nextGravityMs_ = nowMs + gravityIntervalMs();
+    return true;
 }
 
-void Engine::applyAction(Action action, uint32_t nowMs) {
+bool Engine::applyAction(Action action, uint32_t nowMs) {
     if (gameOver_) {
-        return;
+        return false;
     }
+
+    bool changed = false;
 
     switch (action) {
         case Action::MoveLeft:
-            (void)tryMove(-1, 0);
+            changed = tryMove(-1, 0);
             break;
         case Action::MoveRight:
-            (void)tryMove(1, 0);
+            changed = tryMove(1, 0);
             break;
         case Action::SoftDropPressed:
-            softDropHeld_ = true;
-            if (nextGravityMs_ == 0 ||
-                static_cast<int32_t>(nextGravityMs_ - (nowMs + gravityIntervalMs())) > 0) {
-                nextGravityMs_ = nowMs + gravityIntervalMs();
+            if (!softDropHeld_) {
+                softDropHeld_ = true;
+                changed = true;
+                if (nextGravityMs_ == 0 ||
+                    static_cast<int32_t>(nextGravityMs_ - (nowMs + gravityIntervalMs())) > 0) {
+                    nextGravityMs_ = nowMs + gravityIntervalMs();
+                }
             }
             break;
         case Action::SoftDropReleased:
-            softDropHeld_ = false;
-            nextGravityMs_ = nowMs + gravityIntervalMs();
+            if (softDropHeld_) {
+                softDropHeld_ = false;
+                nextGravityMs_ = nowMs + gravityIntervalMs();
+                changed = true;
+            }
             break;
         case Action::HardDrop:
             hardDrop();
+            changed = true;
             break;
         case Action::RotateCw:
-            (void)tryRotate(1);
+            changed = tryRotate(1);
             break;
         case Action::RotateCcw:
-            (void)tryRotate(-1);
+            changed = tryRotate(-1);
             break;
         case Action::Hold:
+        {
+            const TetrominoType previousActive = activePiece_.type;
+            const TetrominoType previousHold = holdPiece_;
+            const bool previousHasHold = hasHoldPiece_;
             hold();
+            changed = previousActive != activePiece_.type ||
+                      previousHold != holdPiece_ ||
+                      previousHasHold != hasHoldPiece_;
             break;
+        }
     }
 
     if (nextGravityMs_ == 0) {
         nextGravityMs_ = nowMs + gravityIntervalMs();
     }
+
+    return changed;
 }
 
 bool Engine::isGameOver() const {
