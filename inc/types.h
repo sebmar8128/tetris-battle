@@ -39,6 +39,7 @@ enum class PauseMenuAction : uint8_t {
 
 enum class GameOverReason : uint8_t {
     TopOut,
+    GarbageCrush,
     SprintComplete,
     Quit,
     Disconnect
@@ -52,7 +53,8 @@ enum class TetrominoType : uint8_t {
     S,
     Z,
     J,
-    L
+    L,
+    Garbage
 };
 
 struct ButtonMapping {

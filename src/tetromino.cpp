@@ -15,6 +15,7 @@ uint8_t pieceIndex(TetrominoType type) {
         case TetrominoType::Z: return 4;
         case TetrominoType::J: return 5;
         case TetrominoType::L: return 6;
+        case TetrominoType::Garbage:
         case TetrominoType::None:
             break;
     }
@@ -179,7 +180,7 @@ bool hasCell(TetrominoType type, uint8_t rotation, int8_t x, int8_t y) {
 }
 
 const KickOffset* wallKicks(TetrominoType type, RotationState from, RotationState to) {
-    if (type == TetrominoType::None || from == to) {
+    if (type == TetrominoType::None || type == TetrominoType::Garbage || from == to) {
         return NO_KICKS;
     }
 

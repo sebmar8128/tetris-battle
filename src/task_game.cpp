@@ -7,11 +7,7 @@
 namespace {
 
 void discardUnusedQueues() {
-    RemoteEvent remoteEvent;
     StorageResponse storageResponse;
-
-    while (xQueueReceive(g_remoteEventQueue, &remoteEvent, 0) == pdTRUE) {
-    }
 
     while (xQueueReceive(g_storageResponseQueue, &storageResponse, 0) == pdTRUE) {
     }
@@ -44,9 +40,19 @@ void gameTask(void* pvParameters) {
             stateChanged = controller.handleInputEvent(inputEvent) || stateChanged;
         }
 
+        RemoteEvent remoteEvent;
+        while (xQueueReceive(g_remoteEventQueue, &remoteEvent, 0) == pdTRUE) {
+            stateChanged = controller.handleRemoteEvent(remoteEvent) || stateChanged;
+        }
+
         discardUnusedQueues();
 
         stateChanged = controller.tick(nowMs) || stateChanged;
+
+        NetPacket outboundPacket;
+        while (controller.popOutboundPacket(outboundPacket)) {
+            (void)xQueueSend(g_outboundPacketQueue, &outboundPacket, 0);
+        }
 
         if (controller.isGameOver()) {
             if (!gameOverRendered) {

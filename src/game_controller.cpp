@@ -11,6 +11,10 @@ void GameController::begin() {
         matchSettings_,
         userSettings_
     });
+
+    outboundHead_ = 0;
+    outboundCount_ = 0;
+    localGameOverPacketQueued_ = false;
 }
 
 bool GameController::handleInputEvent(const InputEvent& event) {
@@ -20,11 +24,11 @@ bool GameController::handleInputEvent(const InputEvent& event) {
 
     if (event.button == userSettings_.buttonMapping.softDrop) {
         if (event.type == InputEventType::Press) {
-            return engine_.applyAction(GameEngine::Action::SoftDropPressed, event.tickMs);
+            return handleStepResult(engine_.applyAction(GameEngine::Action::SoftDropPressed, event.tickMs));
         }
 
         if (event.type == InputEventType::Release) {
-            return engine_.applyAction(GameEngine::Action::SoftDropReleased, event.tickMs);
+            return handleStepResult(engine_.applyAction(GameEngine::Action::SoftDropReleased, event.tickMs));
         }
 
         return false;
@@ -33,11 +37,39 @@ bool GameController::handleInputEvent(const InputEvent& event) {
     GameEngine::Action action = GameEngine::Action::MoveLeft;
 
     if (event.type == InputEventType::Press && mapsToAction(event.button, action)) {
-        return engine_.applyAction(action, event.tickMs);
+        return handleStepResult(engine_.applyAction(action, event.tickMs));
     }
 
     if (event.type == InputEventType::Repeat && mapsToRepeatAction(event.button, action)) {
-        return engine_.applyAction(action, event.tickMs);
+        return handleStepResult(engine_.applyAction(action, event.tickMs));
+    }
+
+    return false;
+}
+
+bool GameController::handleRemoteEvent(const RemoteEvent& event) {
+    if (event.type != RemoteEventType::PacketReceived) {
+        return false;
+    }
+
+    switch (event.packet.type) {
+        case PacketType::Garbage:
+        {
+            const GarbagePacket& garbage = event.packet.payload.garbage;
+            return handleStepResult(engine_.applyGarbage({
+                garbage.lines,
+                garbage.holeColumn
+            }));
+        }
+        case PacketType::GameOver:
+            return false;
+        case PacketType::LobbyState:
+        case PacketType::StartGameRequest:
+        case PacketType::StartGameReply:
+        case PacketType::Pause:
+        case PacketType::PauseActionRequest:
+        case PacketType::PauseActionReply:
+            return false;
     }
 
     return false;
@@ -48,7 +80,18 @@ bool GameController::tick(uint32_t nowMs) {
         return false;
     }
 
-    return engine_.tick(nowMs);
+    return handleStepResult(engine_.tick(nowMs));
+}
+
+bool GameController::popOutboundPacket(NetPacket& packet) {
+    if (outboundCount_ == 0) {
+        return false;
+    }
+
+    packet = outboundPackets_[outboundHead_];
+    outboundHead_ = (outboundHead_ + 1) % OUTBOUND_PACKET_CAPACITY;
+    --outboundCount_;
+    return true;
 }
 
 bool GameController::isGameOver() const {
@@ -83,6 +126,56 @@ void GameController::makeGameOverRenderEvent(RenderEvent& event) const {
         engine_.renderState(),
         engine_.gameOverReason()
     };
+}
+
+bool GameController::handleStepResult(const GameEngine::StepResult& result) {
+    if (result.hasOutgoingGarbage) {
+        queueGarbagePacket(result.outgoingGarbage);
+    }
+
+    if (result.gameOver) {
+        queueGameOverPacket();
+    }
+
+    return result.changed;
+}
+
+bool GameController::queueOutboundPacket(const NetPacket& packet) {
+    if (outboundCount_ >= OUTBOUND_PACKET_CAPACITY) {
+        return false;
+    }
+
+    const uint8_t tail = (outboundHead_ + outboundCount_) % OUTBOUND_PACKET_CAPACITY;
+    outboundPackets_[tail] = packet;
+    ++outboundCount_;
+    return true;
+}
+
+void GameController::queueGarbagePacket(const GameEngine::GarbageAttack& garbage) {
+    NetPacket packet = {};
+    packet.type = PacketType::Garbage;
+    packet.payload.garbage = {
+        garbage.lines,
+        garbage.holeColumn
+    };
+    (void)queueOutboundPacket(packet);
+}
+
+void GameController::queueGameOverPacket() {
+    if (localGameOverPacketQueued_) {
+        return;
+    }
+
+    const PlayerRenderState state = engine_.renderState();
+    NetPacket packet = {};
+    packet.type = PacketType::GameOver;
+    packet.payload.gameOver = {
+        engine_.gameOverReason(),
+        state.score,
+        state.linesCleared
+    };
+
+    localGameOverPacketQueued_ = queueOutboundPacket(packet);
 }
 
 bool GameController::mapsToAction(PhysicalButton button, GameEngine::Action& action) const {

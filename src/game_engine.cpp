@@ -62,6 +62,18 @@ uint32_t scoreForLines(uint8_t clearedLines, uint8_t level) {
     return 0;
 }
 
+uint8_t garbageForLines(uint8_t clearedLines) {
+    switch (clearedLines) {
+        case 2: return 1;
+        case 3: return 2;
+        case 4: return 4;
+        default:
+            break;
+    }
+
+    return 0;
+}
+
 Tetromino::RotationState rotationState(uint8_t rotation) {
     return static_cast<Tetromino::RotationState>(rotation % Tetromino::ROTATION_COUNT);
 }
@@ -91,46 +103,53 @@ void Engine::begin(const Config& config) {
     spawnNextPiece();
 }
 
-bool Engine::tick(uint32_t nowMs) {
+StepResult Engine::tick(uint32_t nowMs) {
+    StepResult result = {};
+
     if (gameOver_) {
-        return false;
+        result.gameOver = true;
+        return result;
     }
 
     if (nextGravityMs_ == 0) {
         nextGravityMs_ = nowMs + gravityIntervalMs();
-        return false;
+        return result;
     }
 
     if (static_cast<int32_t>(nowMs - nextGravityMs_) < 0) {
-        return false;
+        return result;
     }
 
     if (!tryMove(0, 1)) {
-        lockActivePiece();
+        result = lockActivePiece();
+    } else {
+        result.changed = true;
     }
 
     nextGravityMs_ = nowMs + gravityIntervalMs();
-    return true;
+    result.gameOver = gameOver_;
+    return result;
 }
 
-bool Engine::applyAction(Action action, uint32_t nowMs) {
-    if (gameOver_) {
-        return false;
-    }
+StepResult Engine::applyAction(Action action, uint32_t nowMs) {
+    StepResult result = {};
 
-    bool changed = false;
+    if (gameOver_) {
+        result.gameOver = true;
+        return result;
+    }
 
     switch (action) {
         case Action::MoveLeft:
-            changed = tryMove(-1, 0);
+            result.changed = tryMove(-1, 0);
             break;
         case Action::MoveRight:
-            changed = tryMove(1, 0);
+            result.changed = tryMove(1, 0);
             break;
         case Action::SoftDropPressed:
             if (!softDropHeld_) {
                 softDropHeld_ = true;
-                changed = true;
+                result.changed = true;
                 if (nextGravityMs_ == 0 ||
                     static_cast<int32_t>(nextGravityMs_ - (nowMs + gravityIntervalMs())) > 0) {
                     nextGravityMs_ = nowMs + gravityIntervalMs();
@@ -141,18 +160,17 @@ bool Engine::applyAction(Action action, uint32_t nowMs) {
             if (softDropHeld_) {
                 softDropHeld_ = false;
                 nextGravityMs_ = nowMs + gravityIntervalMs();
-                changed = true;
+                result.changed = true;
             }
             break;
         case Action::HardDrop:
-            hardDrop();
-            changed = true;
+            result = hardDrop();
             break;
         case Action::RotateCw:
-            changed = tryRotate(1);
+            result.changed = tryRotate(1);
             break;
         case Action::RotateCcw:
-            changed = tryRotate(-1);
+            result.changed = tryRotate(-1);
             break;
         case Action::Hold:
         {
@@ -160,9 +178,10 @@ bool Engine::applyAction(Action action, uint32_t nowMs) {
             const TetrominoType previousHold = holdPiece_;
             const bool previousHasHold = hasHoldPiece_;
             hold();
-            changed = previousActive != activePiece_.type ||
-                      previousHold != holdPiece_ ||
-                      previousHasHold != hasHoldPiece_;
+            result.changed = previousActive != activePiece_.type ||
+                             previousHold != holdPiece_ ||
+                             previousHasHold != hasHoldPiece_ ||
+                             gameOver_;
             break;
         }
     }
@@ -171,7 +190,61 @@ bool Engine::applyAction(Action action, uint32_t nowMs) {
         nextGravityMs_ = nowMs + gravityIntervalMs();
     }
 
-    return changed;
+    result.gameOver = gameOver_;
+    return result;
+}
+
+StepResult Engine::applyGarbage(const GarbageAttack& garbage) {
+    StepResult result = {};
+
+    if (gameOver_) {
+        result.gameOver = true;
+        return result;
+    }
+
+    const uint8_t lines = min(garbage.lines, TOTAL_ROWS);
+    if (lines == 0) {
+        return result;
+    }
+
+    const uint8_t holeColumn = garbage.holeColumn < BOARD_WIDTH
+        ? garbage.holeColumn
+        : static_cast<uint8_t>(garbage.holeColumn % BOARD_WIDTH);
+
+    bool crushed = false;
+    for (uint8_t row = 0; row < lines; ++row) {
+        for (uint8_t col = 0; col < BOARD_WIDTH; ++col) {
+            if (board_[row][col] != static_cast<uint8_t>(TetrominoType::None)) {
+                crushed = true;
+                break;
+            }
+        }
+    }
+
+    for (uint8_t row = 0; row < TOTAL_ROWS - lines; ++row) {
+        memcpy(board_[row], board_[row + lines], sizeof(board_[row]));
+    }
+
+    for (uint8_t row = TOTAL_ROWS - lines; row < TOTAL_ROWS; ++row) {
+        for (uint8_t col = 0; col < BOARD_WIDTH; ++col) {
+            board_[row][col] = col == holeColumn
+                ? static_cast<uint8_t>(TetrominoType::None)
+                : static_cast<uint8_t>(TetrominoType::Garbage);
+        }
+    }
+
+    if (!canPlace(activePiece_.type, activePiece_.x, activePiece_.y, activePiece_.rotation)) {
+        crushed = true;
+    }
+
+    if (crushed) {
+        gameOver_ = true;
+        gameOverReason_ = GameOverReason::GarbageCrush;
+    }
+
+    result.changed = true;
+    result.gameOver = gameOver_;
+    return result;
 }
 
 bool Engine::isGameOver() const {
@@ -353,9 +426,11 @@ bool Engine::tryRotate(int8_t direction) {
     return false;
 }
 
-void Engine::hardDrop() {
+StepResult Engine::hardDrop() {
     activePiece_ = ghostPiece();
-    lockActivePiece();
+    StepResult result = lockActivePiece();
+    result.changed = true;
+    return result;
 }
 
 void Engine::hold() {
@@ -377,7 +452,9 @@ void Engine::hold() {
     holdUsedThisTurn_ = true;
 }
 
-void Engine::lockActivePiece() {
+StepResult Engine::lockActivePiece() {
+    StepResult result = {};
+
     for (int8_t py = 0; py < Tetromino::SHAPE_SIZE; ++py) {
         for (int8_t px = 0; px < Tetromino::SHAPE_SIZE; ++px) {
             if (!Tetromino::hasCell(activePiece_.type, activePiece_.rotation, px, py)) {
@@ -393,17 +470,24 @@ void Engine::lockActivePiece() {
     }
 
     const uint8_t clearedLines = clearLines();
+    result.clearedLines = clearedLines;
     addLineClearScore(clearedLines);
     linesCleared_ += clearedLines;
     updateLevel();
+    addOutgoingGarbage(result, clearedLines);
 
     if (matchSettings_.mode == GameMode::Sprint40 && linesCleared_ >= 40) {
         gameOver_ = true;
         gameOverReason_ = GameOverReason::SprintComplete;
-        return;
+        result.changed = true;
+        result.gameOver = true;
+        return result;
     }
 
     spawnNextPiece();
+    result.changed = true;
+    result.gameOver = gameOver_;
+    return result;
 }
 
 uint8_t Engine::clearLines() {
@@ -435,6 +519,23 @@ uint8_t Engine::clearLines() {
 
 void Engine::addLineClearScore(uint8_t clearedLines) {
     score_ += scoreForLines(clearedLines, level_);
+}
+
+void Engine::addOutgoingGarbage(StepResult& result, uint8_t clearedLines) {
+    if (!matchSettings_.garbageEnabled) {
+        return;
+    }
+
+    const uint8_t lines = garbageForLines(clearedLines);
+    if (lines == 0) {
+        return;
+    }
+
+    result.hasOutgoingGarbage = true;
+    result.outgoingGarbage = {
+        lines,
+        randomIndex(BOARD_WIDTH)
+    };
 }
 
 void Engine::updateLevel() {

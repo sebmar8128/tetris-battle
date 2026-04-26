@@ -27,11 +27,25 @@ struct Config {
     UserSettings userSettings;
 };
 
+struct GarbageAttack {
+    uint8_t lines;
+    uint8_t holeColumn;
+};
+
+struct StepResult {
+    bool changed;
+    uint8_t clearedLines;
+    bool hasOutgoingGarbage;
+    GarbageAttack outgoingGarbage;
+    bool gameOver;
+};
+
 class Engine {
 public:
     void begin(const Config& config);
-    bool tick(uint32_t nowMs);
-    bool applyAction(Action action, uint32_t nowMs);
+    StepResult tick(uint32_t nowMs);
+    StepResult applyAction(Action action, uint32_t nowMs);
+    StepResult applyGarbage(const GarbageAttack& garbage);
 
     bool isGameOver() const;
     GameOverReason gameOverReason() const;
@@ -49,11 +63,12 @@ private:
     void spawnPiece(TetrominoType type);
     bool tryMove(int8_t dx, int8_t dy);
     bool tryRotate(int8_t direction);
-    void hardDrop();
+    StepResult hardDrop();
     void hold();
-    void lockActivePiece();
+    StepResult lockActivePiece();
     uint8_t clearLines();
     void addLineClearScore(uint8_t clearedLines);
+    void addOutgoingGarbage(StepResult& result, uint8_t clearedLines);
     void updateLevel();
     ActivePieceState ghostPiece() const;
     uint32_t gravityIntervalMs() const;
