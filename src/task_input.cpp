@@ -16,7 +16,6 @@ struct ButtonState {
     bool rawPressed;
     bool debouncedPressed;
     uint32_t lastRawChangeMs;
-    uint32_t pressedAtMs;
     uint32_t nextRepeatMs;
 };
 
@@ -71,11 +70,9 @@ void pollButton(const ButtonConfig& config, ButtonState& state, uint32_t nowMs) 
         state.debouncedPressed = state.rawPressed;
 
         if (state.debouncedPressed) {
-            state.pressedAtMs = nowMs;
             state.nextRepeatMs = nowMs + INPUT_HOLD_DETECT_MS;
             emitInputEvent(config.button, InputEventType::Press, nowMs);
         } else {
-            state.pressedAtMs = 0;
             state.nextRepeatMs = 0;
             emitInputEvent(config.button, InputEventType::Release, nowMs);
         }
