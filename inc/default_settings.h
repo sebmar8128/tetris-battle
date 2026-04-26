@@ -34,7 +34,7 @@ inline UserSettings userSettings() {
 
 inline MatchSettings matchSettings() {
     MatchSettings settings = {};
-    settings.garbageEnabled = false;
+    settings.garbageEnabled = true;
     settings.mode = GameMode::Marathon;
     settings.startingLevel = 0;
     return settings;
