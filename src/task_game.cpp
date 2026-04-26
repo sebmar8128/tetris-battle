@@ -1,17 +1,14 @@
 #include <Arduino.h>
 
+#include "game_controller.h"
 #include "queues.h"
 #include "tasks.h"
 
 namespace {
 
-void discardPendingGameInputs() {
-    InputEvent inputEvent;
+void discardUnusedQueues() {
     RemoteEvent remoteEvent;
     StorageResponse storageResponse;
-
-    while (xQueueReceive(g_inputEventQueue, &inputEvent, 0) == pdTRUE) {
-    }
 
     while (xQueueReceive(g_remoteEventQueue, &remoteEvent, 0) == pdTRUE) {
     }
@@ -25,11 +22,43 @@ void discardPendingGameInputs() {
 void gameTask(void* pvParameters) {
     (void)pvParameters;
 
+    GameController controller;
+    controller.begin();
+
+    RenderEvent renderEvent = {};
+    controller.makeDisplayConfigEvent(renderEvent);
+    (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
+    vTaskDelay(pdMS_TO_TICKS(25));
+    controller.makeGameplayRenderEvent(renderEvent);
+    (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
+
+    TickType_t lastWakeTick = xTaskGetTickCount();
+    bool gameOverRendered = false;
+
     while(true) {
-        // The game task will own match state and consume all inbound events.
-        // Until that logic exists, drain the queues so placeholder producers
-        // cannot fill them indefinitely.
-        discardPendingGameInputs();
-        vTaskDelay(pdMS_TO_TICKS(1));
+        const uint32_t nowMs = millis();
+        bool stateChanged = false;
+
+        InputEvent inputEvent;
+        while (xQueueReceive(g_inputEventQueue, &inputEvent, 0) == pdTRUE) {
+            stateChanged = controller.handleInputEvent(inputEvent) || stateChanged;
+        }
+
+        discardUnusedQueues();
+
+        stateChanged = controller.tick(nowMs) || stateChanged;
+
+        if (controller.isGameOver()) {
+            if (!gameOverRendered) {
+                controller.makeGameOverRenderEvent(renderEvent);
+                (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
+                gameOverRendered = true;
+            }
+        } else if (stateChanged) {
+            controller.makeGameplayRenderEvent(renderEvent);
+            (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
+        }
+
+        vTaskDelayUntil(&lastWakeTick, pdMS_TO_TICKS(5));
     }
 }
