@@ -20,6 +20,7 @@ struct ThemePalette {
     uint16_t pieceZ;
     uint16_t pieceJ;
     uint16_t pieceL;
+    uint16_t garbage;
     uint16_t ghost;
 };
 
@@ -84,7 +85,7 @@ constexpr ThemePalette GAMEBOY_PALETTE = {
     rgb(8, 24, 32), rgb(52, 104, 86), rgb(52, 104, 86),
     rgb(52, 104, 86), rgb(52, 104, 86), rgb(52, 104, 86),
     rgb(52, 104, 86), rgb(52, 104, 86), rgb(52, 104, 86),
-    rgb(52, 104, 86), rgb(136, 192, 112)
+    rgb(52, 104, 86), rgb(8, 24, 32), rgb(136, 192, 112)
 };
 
 constexpr ThemePalette MODERN_PALETTE = {
@@ -92,7 +93,7 @@ constexpr ThemePalette MODERN_PALETTE = {
     TFT_WHITE, rgb(128, 160, 168), TFT_CYAN,
     TFT_CYAN, TFT_YELLOW, TFT_PURPLE,
     TFT_GREEN, TFT_RED, TFT_BLUE,
-    TFT_ORANGE, rgb(60, 90, 96)
+    TFT_ORANGE, rgb(96, 104, 108), rgb(60, 90, 96)
 };
 
 // NES Tetris stores 10 tetrimino palettes and indexes them by level % 10.
@@ -126,6 +127,7 @@ ThemePalette paletteFor(uint8_t level) {
         TFT_BLACK, rgb(36, 42, 40), rgb(96, 110, 104),
         TFT_WHITE, rgb(180, 190, 184), warm,
         cool, warm, cool, warm, cool, warm, cool,
+        rgb(132, 144, 138),
         rgb(72, 82, 78)
     };
 }
@@ -139,6 +141,7 @@ uint16_t colorForPiece(TetrominoType type, const ThemePalette& palette) {
         case TetrominoType::Z: return palette.pieceZ;
         case TetrominoType::J: return palette.pieceJ;
         case TetrominoType::L: return palette.pieceL;
+        case TetrominoType::Garbage: return palette.garbage;
         case TetrominoType::None:
             break;
     }
@@ -241,6 +244,11 @@ void drawBoardCell(
         : colorForPiece(cell.type, palette);
 
     drawCell(x, y, layout.cellSize, color, palette);
+
+    if (cell.type == TetrominoType::Garbage) {
+        tft.drawLine(x + 3, y + 3, x + layout.cellSize - 4, y + layout.cellSize - 4, palette.grid);
+        tft.drawLine(x + layout.cellSize - 4, y + 3, x + 3, y + layout.cellSize - 4, palette.grid);
+    }
 
     if (cell.ghost && cell.type == TetrominoType::None) {
         tft.drawRect(
