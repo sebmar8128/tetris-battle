@@ -33,7 +33,7 @@ TFT_eSPI tft;
 bool initialized = false;
 
 DisplayRenderConfig renderConfig = {
-    ThemeId::Gameboy,
+    ThemeId::Modern,
     true,
     true,
     MAX_NEXT_PIECES
