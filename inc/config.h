@@ -67,13 +67,13 @@ static constexpr int8_t PIN_BUTTON_LD_LEFT  = 8;
 #elif defined(BOARD_ROLE_B)
 
 static constexpr int8_t PIN_BUTTON_LD_UP    = 4;
+static constexpr int8_t PIN_BUTTON_LD_LEFT  = 7;
 static constexpr int8_t PIN_BUTTON_LD_RIGHT = 5;
-static constexpr int8_t PIN_BUTTON_LD_LEFT  = 6;
-static constexpr int8_t PIN_BUTTON_LD_DOWN  = 7;
+static constexpr int8_t PIN_BUTTON_LD_DOWN  = 6;
 static constexpr int8_t PIN_BUTTON_RD_UP    = 16;
-static constexpr int8_t PIN_BUTTON_RD_RIGHT = 17;
-static constexpr int8_t PIN_BUTTON_RD_DOWN  = 18;
 static constexpr int8_t PIN_BUTTON_RD_LEFT  = 8;
+static constexpr int8_t PIN_BUTTON_RD_RIGHT = 17; // UNUSED RIGHT NOW
+static constexpr int8_t PIN_BUTTON_RD_DOWN  = 18;
 
 #else
 #error "Build with 'pio run -e a' or 'pio run -e b'."
