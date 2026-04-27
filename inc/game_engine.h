@@ -9,6 +9,7 @@ namespace GameEngine {
 static constexpr uint8_t HIDDEN_ROWS = 2;
 static constexpr uint8_t VISIBLE_ROWS = BOARD_HEIGHT;
 static constexpr uint8_t TOTAL_ROWS = HIDDEN_ROWS + VISIBLE_ROWS;
+static constexpr uint8_t PENDING_GARBAGE_CAPACITY = 8;
 
 enum class Action : uint8_t {
     MoveLeft,
@@ -45,7 +46,7 @@ public:
     void begin(const Config& config);
     StepResult tick(uint32_t nowMs);
     StepResult applyAction(Action action, uint32_t nowMs);
-    StepResult applyGarbage(const GarbageAttack& garbage);
+    StepResult queueGarbage(const GarbageAttack& garbage);
 
     bool isGameOver() const;
     GameOverReason gameOverReason() const;
@@ -66,6 +67,10 @@ private:
     StepResult hardDrop();
     void hold();
     StepResult lockActivePiece();
+    void applyPendingGarbage();
+    void applyGarbageNow(const GarbageAttack& garbage);
+    bool pushPendingGarbage(const GarbageAttack& garbage);
+    uint8_t pendingGarbageLineCount() const;
     uint8_t clearLines();
     void addLineClearScore(uint8_t clearedLines);
     void addOutgoingGarbage(StepResult& result, uint8_t clearedLines);
@@ -88,6 +93,9 @@ private:
     uint8_t bagIndex_;
     TetrominoType nextQueue_[MAX_NEXT_PIECES];
     uint8_t nextQueueCount_;
+    GarbageAttack pendingGarbage_[PENDING_GARBAGE_CAPACITY];
+    uint8_t pendingGarbageHead_;
+    uint8_t pendingGarbageCount_;
     uint32_t rngState_;
 
     MatchSettings matchSettings_;

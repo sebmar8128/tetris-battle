@@ -96,6 +96,10 @@ constexpr int16_t STATS_PANEL_X = 18;
 constexpr int16_t STATS_PANEL_Y = 130;
 constexpr int16_t STATS_PANEL_W = 104;
 constexpr int16_t STATS_PANEL_H = 122;
+constexpr int16_t GARBAGE_WARNING_X = 18;
+constexpr int16_t GARBAGE_WARNING_Y = 268;
+constexpr int16_t GARBAGE_WARNING_W = 104;
+constexpr int16_t GARBAGE_WARNING_H = 38;
 constexpr int16_t LEVEL_PANEL_X = 356;
 constexpr int16_t LEVEL_PANEL_Y = 256;
 constexpr int16_t LEVEL_PANEL_W = 104;
@@ -366,7 +370,6 @@ const char* postGameActionLabel(PostGameMenuAction action) {
 const char* gameOverReasonLabel(GameOverReason reason) {
     switch (reason) {
         case GameOverReason::TopOut: return "Top Out";
-        case GameOverReason::GarbageCrush: return "Garbage Crush";
         case GameOverReason::SprintComplete: return "Sprint Complete";
         case GameOverReason::Quit: return "Quit";
         case GameOverReason::Disconnect: return "Disconnect";
@@ -737,10 +740,46 @@ void drawLevelValue(uint8_t level, const ThemePalette& palette) {
     tft.drawNumber(level, 408, 282, 2);
 }
 
+void drawPendingGarbageWarning(uint8_t lines, const ThemePalette& palette) {
+    tft.fillRect(
+        GARBAGE_WARNING_X,
+        GARBAGE_WARNING_Y,
+        GARBAGE_WARNING_W,
+        GARBAGE_WARNING_H,
+        palette.background
+    );
+
+    if (lines == 0) {
+        return;
+    }
+
+    tft.fillRect(
+        GARBAGE_WARNING_X,
+        GARBAGE_WARNING_Y,
+        GARBAGE_WARNING_W,
+        GARBAGE_WARNING_H,
+        palette.panel
+    );
+    tft.drawRect(
+        GARBAGE_WARNING_X,
+        GARBAGE_WARNING_Y,
+        GARBAGE_WARNING_W,
+        GARBAGE_WARNING_H,
+        TFT_RED
+    );
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(TFT_RED, palette.panel);
+    tft.drawString("!", GARBAGE_WARNING_X + 18, GARBAGE_WARNING_Y + GARBAGE_WARNING_H / 2, 4);
+    tft.setTextDatum(MR_DATUM);
+    tft.setTextColor(palette.text, palette.panel);
+    tft.drawNumber(lines, GARBAGE_WARNING_X + GARBAGE_WARNING_W - 14, GARBAGE_WARNING_Y + GARBAGE_WARNING_H / 2, 4);
+}
+
 void drawStatValues(const PlayerRenderState& player, const ThemePalette& palette) {
     drawScoreValue(player.score, palette);
     drawLinesValue(player.linesCleared, palette);
     drawLevelValue(player.level, palette);
+    drawPendingGarbageWarning(player.pendingGarbageLines, palette);
 }
 
 void drawGameplayChrome(const PlayerRenderState& player, const ThemePalette& palette) {
@@ -799,6 +838,10 @@ void drawGameplayDelta(const PlayerRenderState& previous, const PlayerRenderStat
 
     if (previous.level != current.level) {
         drawLevelValue(current.level, palette);
+    }
+
+    if (previous.pendingGarbageLines != current.pendingGarbageLines) {
+        drawPendingGarbageWarning(current.pendingGarbageLines, palette);
     }
     tft.endWrite();
 }

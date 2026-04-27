@@ -194,7 +194,7 @@ StepResult Engine::applyAction(Action action, uint32_t nowMs) {
     return result;
 }
 
-StepResult Engine::applyGarbage(const GarbageAttack& garbage) {
+StepResult Engine::queueGarbage(const GarbageAttack& garbage) {
     StepResult result = {};
 
     if (gameOver_) {
@@ -202,48 +202,11 @@ StepResult Engine::applyGarbage(const GarbageAttack& garbage) {
         return result;
     }
 
-    const uint8_t lines = min(garbage.lines, TOTAL_ROWS);
-    if (lines == 0) {
+    if (!pushPendingGarbage(garbage)) {
         return result;
     }
 
-    const uint8_t holeColumn = garbage.holeColumn < BOARD_WIDTH
-        ? garbage.holeColumn
-        : static_cast<uint8_t>(garbage.holeColumn % BOARD_WIDTH);
-
-    bool crushed = false;
-    for (uint8_t row = 0; row < lines; ++row) {
-        for (uint8_t col = 0; col < BOARD_WIDTH; ++col) {
-            if (board_[row][col] != static_cast<uint8_t>(TetrominoType::None)) {
-                crushed = true;
-                break;
-            }
-        }
-    }
-
-    for (uint8_t row = 0; row < TOTAL_ROWS - lines; ++row) {
-        memcpy(board_[row], board_[row + lines], sizeof(board_[row]));
-    }
-
-    for (uint8_t row = TOTAL_ROWS - lines; row < TOTAL_ROWS; ++row) {
-        for (uint8_t col = 0; col < BOARD_WIDTH; ++col) {
-            board_[row][col] = col == holeColumn
-                ? static_cast<uint8_t>(TetrominoType::None)
-                : static_cast<uint8_t>(TetrominoType::Garbage);
-        }
-    }
-
-    if (!canPlace(activePiece_.type, activePiece_.x, activePiece_.y, activePiece_.rotation)) {
-        crushed = true;
-    }
-
-    if (crushed) {
-        gameOver_ = true;
-        gameOverReason_ = GameOverReason::GarbageCrush;
-    }
-
     result.changed = true;
-    result.gameOver = gameOver_;
     return result;
 }
 
@@ -280,8 +243,47 @@ PlayerRenderState Engine::renderState() const {
     state.score = score_;
     state.linesCleared = linesCleared_;
     state.level = level_;
+    state.pendingGarbageLines = pendingGarbageLineCount();
 
     return state;
+}
+
+void Engine::applyGarbageNow(const GarbageAttack& garbage) {
+    const uint8_t lines = min(garbage.lines, TOTAL_ROWS);
+    if (lines == 0) {
+        return;
+    }
+
+    const uint8_t holeColumn = garbage.holeColumn < BOARD_WIDTH
+        ? garbage.holeColumn
+        : static_cast<uint8_t>(garbage.holeColumn % BOARD_WIDTH);
+
+    bool overflow = false;
+    for (uint8_t row = 0; row < lines; ++row) {
+        for (uint8_t col = 0; col < BOARD_WIDTH; ++col) {
+            if (board_[row][col] != static_cast<uint8_t>(TetrominoType::None)) {
+                overflow = true;
+                break;
+            }
+        }
+    }
+
+    for (uint8_t row = 0; row < TOTAL_ROWS - lines; ++row) {
+        memcpy(board_[row], board_[row + lines], sizeof(board_[row]));
+    }
+
+    for (uint8_t row = TOTAL_ROWS - lines; row < TOTAL_ROWS; ++row) {
+        for (uint8_t col = 0; col < BOARD_WIDTH; ++col) {
+            board_[row][col] = col == holeColumn
+                ? static_cast<uint8_t>(TetrominoType::None)
+                : static_cast<uint8_t>(TetrominoType::Garbage);
+        }
+    }
+
+    if (overflow) {
+        gameOver_ = true;
+        gameOverReason_ = GameOverReason::TopOut;
+    }
 }
 
 void Engine::clear() {
@@ -301,9 +303,15 @@ void Engine::clear() {
     level_ = 0;
     firstLevelUpLines_ = 10;
     nextGravityMs_ = 0;
+    pendingGarbageHead_ = 0;
+    pendingGarbageCount_ = 0;
 
     for (uint8_t i = 0; i < MAX_NEXT_PIECES; ++i) {
         nextQueue_[i] = TetrominoType::None;
+    }
+
+    for (uint8_t i = 0; i < PENDING_GARBAGE_CAPACITY; ++i) {
+        pendingGarbage_[i] = {};
     }
 }
 
@@ -390,6 +398,63 @@ void Engine::spawnPiece(TetrominoType type) {
         gameOver_ = true;
         gameOverReason_ = GameOverReason::TopOut;
     }
+}
+
+bool Engine::pushPendingGarbage(const GarbageAttack& garbage) {
+    const uint8_t lines = min(garbage.lines, TOTAL_ROWS);
+    if (lines == 0) {
+        return false;
+    }
+
+    const GarbageAttack clean = {
+        lines,
+        garbage.holeColumn < BOARD_WIDTH
+            ? garbage.holeColumn
+            : static_cast<uint8_t>(garbage.holeColumn % BOARD_WIDTH)
+    };
+
+    if (pendingGarbageCount_ < PENDING_GARBAGE_CAPACITY) {
+        const uint8_t tail = (pendingGarbageHead_ + pendingGarbageCount_) % PENDING_GARBAGE_CAPACITY;
+        pendingGarbage_[tail] = clean;
+        ++pendingGarbageCount_;
+        return true;
+    }
+
+    const uint8_t tail = (pendingGarbageHead_ + pendingGarbageCount_ - 1) % PENDING_GARBAGE_CAPACITY;
+    pendingGarbage_[tail].lines = min<uint8_t>(
+        TOTAL_ROWS,
+        pendingGarbage_[tail].lines + clean.lines
+    );
+    pendingGarbage_[tail].holeColumn = clean.holeColumn;
+    return true;
+}
+
+void Engine::applyPendingGarbage() {
+    while (!gameOver_ && pendingGarbageCount_ > 0) {
+        const GarbageAttack garbage = pendingGarbage_[pendingGarbageHead_];
+        pendingGarbage_[pendingGarbageHead_] = {};
+        pendingGarbageHead_ = (pendingGarbageHead_ + 1) % PENDING_GARBAGE_CAPACITY;
+        --pendingGarbageCount_;
+        applyGarbageNow(garbage);
+    }
+
+    if (gameOver_) {
+        pendingGarbageHead_ = 0;
+        pendingGarbageCount_ = 0;
+        for (uint8_t i = 0; i < PENDING_GARBAGE_CAPACITY; ++i) {
+            pendingGarbage_[i] = {};
+        }
+    }
+}
+
+uint8_t Engine::pendingGarbageLineCount() const {
+    uint16_t lines = 0;
+    for (uint8_t i = 0; i < pendingGarbageCount_; ++i) {
+        const uint8_t index = (pendingGarbageHead_ + i) % PENDING_GARBAGE_CAPACITY;
+        lines += pendingGarbage_[index].lines;
+    }
+
+    return static_cast<uint8_t>(min<uint16_t>(lines, UINT8_MAX));
 }
 
 bool Engine::tryMove(int8_t dx, int8_t dy) {
@@ -484,7 +549,10 @@ StepResult Engine::lockActivePiece() {
         return result;
     }
 
-    spawnNextPiece();
+    applyPendingGarbage();
+    if (!gameOver_) {
+        spawnNextPiece();
+    }
     result.changed = true;
     result.gameOver = gameOver_;
     return result;

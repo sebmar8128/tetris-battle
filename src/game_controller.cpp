@@ -1125,7 +1125,7 @@ bool GameController::handleGarbagePacket(const NetPacket& packet) {
         return false;
     }
 
-    return handleStepResult(engine_.applyGarbage({
+    return handleStepResult(engine_.queueGarbage({
         packet.payload.garbage.lines,
         packet.payload.garbage.holeColumn
     }));

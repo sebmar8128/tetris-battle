@@ -115,7 +115,6 @@ enum class UserSettingsExitAction : uint8_t {
 
 enum class GameOverReason : uint8_t {
     TopOut,
-    GarbageCrush,
     SprintComplete,
     Quit,
     Disconnect
@@ -183,4 +182,5 @@ struct PlayerRenderState {
     uint32_t score;
     uint16_t linesCleared;
     uint8_t level;
+    uint8_t pendingGarbageLines;
 };
