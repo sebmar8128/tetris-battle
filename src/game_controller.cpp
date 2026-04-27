@@ -7,7 +7,6 @@
 
 namespace {
 
-constexpr char UNKNOWN_REMOTE_USERNAME[] = "REMOTE";
 constexpr uint8_t MAX_STARTING_LEVEL = 29;
 constexpr uint8_t USER_SETTINGS_ITEM_COUNT = 7;
 constexpr uint8_t USERNAME_ENTRY_ITEM_COUNT = 3;
@@ -17,8 +16,9 @@ PresenceState presenceForPhase(GamePhase phase) {
     switch (phase) {
         case GamePhase::Welcome:
         case GamePhase::UsernameEntry:
-        case GamePhase::UserSettings:
             return PresenceState::NotInLobby;
+        case GamePhase::UserSettings:
+            return PresenceState::SignedIn;
         case GamePhase::Lobby: return PresenceState::InLobby;
         case GamePhase::Gameplay: return PresenceState::Gameplay;
         case GamePhase::Paused: return PresenceState::Paused;
@@ -128,8 +128,7 @@ void GameController::begin() {
     remoteOnline_ = false;
     remoteDeviceId_ = 0;
     remotePresenceState_ = PresenceState::NotInLobby;
-    strncpy(remoteUsername_, UNKNOWN_REMOTE_USERNAME, MAX_USERNAME_LEN);
-    remoteUsername_[MAX_USERNAME_LEN] = '\0';
+    remoteUsername_[0] = '\0';
 
     settingsRevision_ = 0;
     settingsOwnerId_ = 0;
@@ -206,6 +205,7 @@ bool GameController::handleRemoteEvent(const RemoteEvent& event) {
         case RemoteEventType::PeerDisconnected:
             remoteOnline_ = false;
             remotePresenceState_ = PresenceState::NotInLobby;
+            remoteUsername_[0] = '\0';
             if ((phase_ == GamePhase::Gameplay || phase_ == GamePhase::Paused) && !localTerminal_) {
                 disconnected_ = true;
                 finalizeLocalGameOver(GameOverReason::Disconnect);
@@ -377,7 +377,11 @@ void GameController::makeScreenRenderEvent(RenderEvent& event) const {
             event.payload.screen.screen = RenderScreen::Lobby;
             strncpy(event.payload.screen.payload.lobby.localUsername, userSettings_.username, MAX_USERNAME_LEN);
             event.payload.screen.payload.lobby.localUsername[MAX_USERNAME_LEN] = '\0';
-            strncpy(event.payload.screen.payload.lobby.remoteUsername, remoteUsername_, MAX_USERNAME_LEN);
+            strncpy(
+                event.payload.screen.payload.lobby.remoteUsername,
+                remoteOnline_ && remotePresenceState_ != PresenceState::NotInLobby ? remoteUsername_ : "",
+                MAX_USERNAME_LEN
+            );
             event.payload.screen.payload.lobby.remoteUsername[MAX_USERNAME_LEN] = '\0';
             event.payload.screen.payload.lobby.remoteStatus = lobbyPeerStatus(remoteOnline_, remotePresenceState_);
             event.payload.screen.payload.lobby.matchSettings = matchSettings_;
@@ -707,12 +711,12 @@ bool GameController::handleLobbyInput(const InputEvent& event) {
     }
 
     if (isMenuUp(event.button)) {
-        lobbySelection_ = nextEnumValue(lobbySelection_, -1, 5);
+        lobbySelection_ = nextEnumValue(lobbySelection_, -1, 6);
         return true;
     }
 
     if (isMenuDown(event.button)) {
-        lobbySelection_ = nextEnumValue(lobbySelection_, 1, 5);
+        lobbySelection_ = nextEnumValue(lobbySelection_, 1, 6);
         return true;
     }
 
@@ -748,6 +752,7 @@ bool GameController::handleLobbyInput(const InputEvent& event) {
                 changed = true;
                 break;
             case LobbyMenuItem::StartGame:
+            case LobbyMenuItem::ExitLobby:
                 break;
         }
 
@@ -759,7 +764,16 @@ bool GameController::handleLobbyInput(const InputEvent& event) {
         return changed;
     }
 
-    if (!isSelectEvent(event) || lobbySelection_ != LobbyMenuItem::StartGame) {
+    if (!isSelectEvent(event)) {
+        return false;
+    }
+
+    if (lobbySelection_ == LobbyMenuItem::ExitLobby) {
+        enterUserSettings(userSettings_);
+        return true;
+    }
+
+    if (lobbySelection_ != LobbyMenuItem::StartGame) {
         return false;
     }
 
@@ -927,8 +941,12 @@ bool GameController::handlePresencePacket(const NetPacket& packet) {
     remoteOnline_ = true;
     remoteDeviceId_ = packet.header.senderId;
     remotePresenceState_ = packet.payload.presence.presenceState;
-    strncpy(remoteUsername_, packet.payload.presence.username, MAX_USERNAME_LEN);
-    remoteUsername_[MAX_USERNAME_LEN] = '\0';
+    if (remotePresenceState_ == PresenceState::NotInLobby) {
+        remoteUsername_[0] = '\0';
+    } else {
+        strncpy(remoteUsername_, packet.payload.presence.username, MAX_USERNAME_LEN);
+        remoteUsername_[MAX_USERNAME_LEN] = '\0';
+    }
     return phase_ == GamePhase::Lobby;
 }
 
@@ -1323,6 +1341,7 @@ void GameController::enterWelcome() {
     displayConfigDirty_ = true;
     remoteOnline_ = false;
     remotePresenceState_ = PresenceState::NotInLobby;
+    remoteUsername_[0] = '\0';
     queuePresencePacket();
 }
 
@@ -1349,6 +1368,7 @@ void GameController::enterUserSettings(const UserSettings& settings) {
     userSettingsConfirmContinueSelected_ = false;
     displayConfigDirty_ = true;
     resetStoragePending();
+    queuePresencePacket();
 }
 
 void GameController::joinLobbyFromSettings() {

@@ -225,7 +225,7 @@ void wirelessTask(void* pvParameters) {
     NetPacket cachedPresence = {};
     cachedPresence.header.protocolVersion = NET_PROTOCOL_VERSION;
     cachedPresence.header.type = PacketType::Presence;
-    cachedPresence.payload.presence.presenceState = PresenceState::InLobby;
+    cachedPresence.payload.presence.presenceState = PresenceState::NotInLobby;
     cachedPresence.payload.presence.username[0] = '\0';
 
     ReliableQueueEntry pending[WIRELESS_PENDING_PACKET_CAPACITY] = {};

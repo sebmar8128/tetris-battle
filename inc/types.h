@@ -33,6 +33,7 @@ enum class GameMode : uint8_t {
 
 enum class PresenceState : uint8_t {
     NotInLobby,
+    SignedIn,
     InLobby,
     Gameplay,
     Paused,

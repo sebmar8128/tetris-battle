@@ -168,7 +168,8 @@ enum class LobbyMenuItem : uint8_t {
     Mode,
     StartingLevel,
     MusicEnabled,
-    StartGame
+    StartGame,
+    ExitLobby
 };
 
 enum class PausePanelState : uint8_t {
