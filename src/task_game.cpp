@@ -53,6 +53,11 @@ void gameTask(void* pvParameters) {
             (void)xQueueSend(g_outboundPacketQueue, &outboundPacket, 0);
         }
 
+        MusicEvent musicEvent;
+        while (controller.popMusicEvent(musicEvent)) {
+            (void)xQueueSend(g_musicEventQueue, &musicEvent, 0);
+        }
+
         if (stateChanged) {
             controller.makeScreenRenderEvent(renderEvent);
             (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
