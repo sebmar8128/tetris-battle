@@ -17,9 +17,6 @@ void haltWithError(const char* message) {
 
 void setup() {
     Serial.begin(115200);
-    vTaskDelay(pdMS_TO_TICKS(250));
-
-    Serial.println("tetris-battle boot");
 
     if (!initQueues()) {
         haltWithError("queue initialization failed");
@@ -28,8 +25,6 @@ void setup() {
     if (!createApplicationTasks()) {
         haltWithError("task creation failed");
     }
-
-    Serial.println("scheduler scaffolding ready");
 }
 
 void loop() {

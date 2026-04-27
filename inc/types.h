@@ -31,8 +31,40 @@ enum class GameMode : uint8_t {
     Sprint40
 };
 
+enum class PresenceState : uint8_t {
+    NotInLobby,
+    InLobby,
+    Gameplay,
+    Paused,
+    GameOver
+};
+
+enum class GamePhase : uint8_t {
+    Lobby,
+    Gameplay,
+    Paused,
+    GameOver
+};
+
+enum class ModalState : uint8_t {
+    None,
+    OutgoingRequest,
+    IncomingRequest
+};
+
+enum class LobbyPeerStatus : uint8_t {
+    Offline,
+    Online,
+    InLobby
+};
+
 enum class PauseMenuAction : uint8_t {
     Resume,
+    Restart,
+    Quit
+};
+
+enum class PostGameMenuAction : uint8_t {
     Restart,
     Quit
 };

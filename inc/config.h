@@ -24,13 +24,17 @@ static constexpr uint32_t STACK_STORAGE  = (4 * 1024);
 // Queue lengths
 static constexpr uint32_t QLEN_INPUT_EVENTS      = 32;
 static constexpr uint32_t QLEN_REMOTE_EVENTS     = 32;
-static constexpr uint32_t QLEN_OUTBOUND_PACKETS  = 32;
+static constexpr uint32_t QLEN_OUTBOUND_PACKETS  = 48;
 static constexpr uint32_t QLEN_RENDER_EVENTS     = 1;
 static constexpr uint32_t QLEN_STORAGE_REQUESTS  = 8;
 static constexpr uint32_t QLEN_STORAGE_RESPONSES = 8;
 
 // Task timing
 static constexpr TickType_t WIRELESS_HEARTBEAT_PERIOD_TICKS = pdMS_TO_TICKS(200);
+static constexpr uint32_t WIRELESS_OFFLINE_TIMEOUT_MS       = 600;
+static constexpr uint32_t WIRELESS_ACK_TIMEOUT_MS           = 25;
+static constexpr uint32_t WIRELESS_PENDING_PACKET_CAPACITY  = 16;
+static constexpr uint32_t WIRELESS_RX_FRAME_CAPACITY        = 16;
 
 // Input timing
 static constexpr TickType_t INPUT_POLL_PERIOD_TICKS   = pdMS_TO_TICKS(5);

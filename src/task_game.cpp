@@ -25,11 +25,10 @@ void gameTask(void* pvParameters) {
     controller.makeDisplayConfigEvent(renderEvent);
     (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
     vTaskDelay(pdMS_TO_TICKS(25));
-    controller.makeGameplayRenderEvent(renderEvent);
+    controller.makeScreenRenderEvent(renderEvent);
     (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
 
     TickType_t lastWakeTick = xTaskGetTickCount();
-    bool gameOverRendered = false;
 
     while(true) {
         const uint32_t nowMs = millis();
@@ -54,14 +53,8 @@ void gameTask(void* pvParameters) {
             (void)xQueueSend(g_outboundPacketQueue, &outboundPacket, 0);
         }
 
-        if (controller.isGameOver()) {
-            if (!gameOverRendered) {
-                controller.makeGameOverRenderEvent(renderEvent);
-                (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
-                gameOverRendered = true;
-            }
-        } else if (stateChanged) {
-            controller.makeGameplayRenderEvent(renderEvent);
+        if (stateChanged) {
+            controller.makeScreenRenderEvent(renderEvent);
             (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
         }
 
