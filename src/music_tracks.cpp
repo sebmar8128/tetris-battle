@@ -16,12 +16,12 @@ constexpr MusicNote KOROBEINIKI_NOTES[] = {
     {N::C5, L::Quarter}, {N::A4, L::Quarter},
     {N::A4, L::Half},
 
-    {N::D5, L::Quarter}, {N::F5, L::Eighth}, {N::A5, L::Eighth},
-    {N::G5, L::Quarter}, {N::F5, L::Eighth}, {N::E5, L::Eighth},
-    {N::C5, L::DottedQuarter}, {N::E5, L::Eighth},
-    {N::D5, L::Quarter}, {N::C5, L::Eighth}, {N::B4, L::Eighth},
+    {N::Rest, L::Eighth}, {N::D5, L::Quarter}, {N::F5, L::Eighth}, {N::A5, L::Quarter},
+    {N::G5, L::Eighth}, {N::F5, L::Eighth}, {N::E5, L::DottedQuarter},
+    {N::C5, L::Eighth}, {N::E5, L::Quarter},
+    {N::D5, L::Eighth}, {N::C5, L::Eighth},
 
-    {N::B4, L::Quarter}, {N::C5, L::Eighth}, {N::D5, L::Eighth},
+    {N::B4, L::Quarter}, {N::B4, L::Eighth}, {N::C5, L::Eighth}, {N::D5, L::Quarter},
     {N::E5, L::Quarter}, {N::C5, L::Quarter},
     {N::A4, L::Quarter}, {N::A4, L::Quarter},
     {N::Rest, L::Quarter},
