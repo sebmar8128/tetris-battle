@@ -7,13 +7,14 @@
 
 #define TFT_WIDTH  320
 #define TFT_HEIGHT 480
+#define USE_HSPI_PORT 1
 
 // #define TFT_MISO 14 (UNUSED RIGHT NOW)
-#define TFT_MOSI 10
-#define TFT_SCLK 9
-#define TFT_CS   13
-#define TFT_DC   11
-#define TFT_RST  12
+#define TFT_MOSI 11
+#define TFT_SCLK 12
+#define TFT_CS   46
+#define TFT_DC   10
+#define TFT_RST  9
 
 #define LOAD_GLCD  1
 #define LOAD_FONT2 1

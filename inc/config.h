@@ -40,12 +40,12 @@ static constexpr uint32_t INPUT_HOLD_DETECT_MS        = 250;
 static constexpr uint32_t INPUT_REPEAT_PERIOD_MS      = 40;
 
 // Button GPIOs. Assumption is INPUT_PULLUP.
-static constexpr int8_t PIN_BUTTON_LD_UP    = 21;
-static constexpr int8_t PIN_BUTTON_LD_LEFT  = 20;
-static constexpr int8_t PIN_BUTTON_LD_RIGHT = 47;
-static constexpr int8_t PIN_BUTTON_LD_DOWN  = 48;
-static constexpr int8_t PIN_BUTTON_RD_UP    = 41;
-static constexpr int8_t PIN_BUTTON_RD_LEFT  = 40;
-static constexpr int8_t PIN_BUTTON_RD_RIGHT = 35; // UNUSED RIGHT NOW
-static constexpr int8_t PIN_BUTTON_RD_DOWN  = 42;
-static constexpr int8_t PIN_BUTTON_CENTER   = 36;
+static constexpr int8_t PIN_BUTTON_LD_UP    = 4;
+static constexpr int8_t PIN_BUTTON_LD_LEFT  = 7;
+static constexpr int8_t PIN_BUTTON_LD_RIGHT = 5;
+static constexpr int8_t PIN_BUTTON_LD_DOWN  = 6;
+static constexpr int8_t PIN_BUTTON_RD_UP    = 16;
+static constexpr int8_t PIN_BUTTON_RD_LEFT  = 8;
+static constexpr int8_t PIN_BUTTON_RD_RIGHT = 17; // UNUSED RIGHT NOW
+static constexpr int8_t PIN_BUTTON_RD_DOWN  = 18;
+static constexpr int8_t PIN_BUTTON_CENTER   = 15;
