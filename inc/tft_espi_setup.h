@@ -4,6 +4,7 @@
 // Adjust these GPIOs to match the physical wiring before hardware bring-up.
 #define ST7796_DRIVER 1
 #define DISABLE_ALL_LIBRARY_WARNINGS 1
+#define USE_HSPI_PORT 1
 
 #define TFT_WIDTH  320
 #define TFT_HEIGHT 480
