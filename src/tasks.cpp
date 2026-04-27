@@ -8,6 +8,7 @@ TaskHandle_t g_inputTaskHandle    = nullptr;
 TaskHandle_t g_gameTaskHandle     = nullptr;
 TaskHandle_t g_renderTaskHandle   = nullptr;
 TaskHandle_t g_storageTaskHandle  = nullptr;
+TaskHandle_t g_musicTaskHandle    = nullptr;
 
 bool createApplicationTasks() {
     BaseType_t ok;
@@ -63,6 +64,17 @@ bool createApplicationTasks() {
         nullptr,
         PRIO_STORAGE,
         &g_storageTaskHandle,
+        CORE_APP
+    );
+    if (ok != pdPASS) return false;
+
+    ok = xTaskCreatePinnedToCore(
+        musicTask,
+        "MusicTask",
+        STACK_MUSIC,
+        nullptr,
+        PRIO_MUSIC,
+        &g_musicTaskHandle,
         CORE_APP
     );
     if (ok != pdPASS) return false;

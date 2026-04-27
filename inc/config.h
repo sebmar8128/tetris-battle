@@ -13,6 +13,7 @@ static constexpr uint32_t PRIO_INPUT    = 5;
 static constexpr uint32_t PRIO_GAME     = 4;
 static constexpr uint32_t PRIO_RENDER   = 3;
 static constexpr uint32_t PRIO_STORAGE  = 2;
+static constexpr uint32_t PRIO_MUSIC    = 1;
 
 // Stack sizes (in bytes, not words like vanilla FreeRTOS)
 static constexpr uint32_t STACK_WIRELESS = (4 * 1024);
@@ -20,6 +21,7 @@ static constexpr uint32_t STACK_INPUT    = (3 * 1024);
 static constexpr uint32_t STACK_GAME     = (4 * 1024);
 static constexpr uint32_t STACK_RENDER   = (6 * 1024);
 static constexpr uint32_t STACK_STORAGE  = (4 * 1024);
+static constexpr uint32_t STACK_MUSIC    = (3 * 1024);
 
 // Queue lengths
 static constexpr uint32_t QLEN_INPUT_EVENTS      = 32;
@@ -28,6 +30,10 @@ static constexpr uint32_t QLEN_OUTBOUND_PACKETS  = 48;
 static constexpr uint32_t QLEN_RENDER_EVENTS     = 1;
 static constexpr uint32_t QLEN_STORAGE_REQUESTS  = 8;
 static constexpr uint32_t QLEN_STORAGE_RESPONSES = 8;
+static constexpr uint32_t QLEN_MUSIC_EVENTS      = 8;
+
+// Audio
+static constexpr int8_t PIN_BUZZER = 1;
 
 // Task timing
 static constexpr TickType_t WIRELESS_HEARTBEAT_PERIOD_TICKS = pdMS_TO_TICKS(200);
@@ -43,7 +49,6 @@ static constexpr uint32_t INPUT_HOLD_DETECT_MS        = 250;
 static constexpr uint32_t INPUT_REPEAT_PERIOD_MS      = 40;
 
 // Button GPIOs. Assumption is INPUT_PULLUP.
-static constexpr int8_t PIN_BUZZER        = 1;
 static constexpr int8_t PIN_BUTTON_CENTER = 15;
 
 #if defined(BOARD_ROLE_A) && defined(BOARD_ROLE_B)

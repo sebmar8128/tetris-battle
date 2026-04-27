@@ -7,6 +7,7 @@ QueueHandle_t g_outboundPacketQueue   = nullptr;
 QueueHandle_t g_renderEventQueue      = nullptr;
 QueueHandle_t g_storageRequestQueue   = nullptr;
 QueueHandle_t g_storageResponseQueue  = nullptr;
+QueueHandle_t g_musicEventQueue       = nullptr;
 
 bool initQueues() {
     g_inputEventQueue = xQueueCreate(
@@ -39,10 +40,16 @@ bool initQueues() {
         sizeof(StorageResponse)
     );
 
+    g_musicEventQueue = xQueueCreate(
+        QLEN_MUSIC_EVENTS,
+        sizeof(MusicEvent)
+    );
+
     return g_inputEventQueue &&
            g_remoteEventQueue &&
            g_outboundPacketQueue &&
            g_renderEventQueue &&
            g_storageRequestQueue &&
-           g_storageResponseQueue;
+           g_storageResponseQueue &&
+           g_musicEventQueue;
 }

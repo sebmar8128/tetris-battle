@@ -113,6 +113,7 @@ struct MatchSettings {
     bool garbageEnabled;
     GameMode mode;
     uint8_t startingLevel;
+    bool musicEnabled;
 };
 
 struct BoardState {

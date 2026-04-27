@@ -164,6 +164,7 @@ enum class LobbyMenuItem : uint8_t {
     GarbageEnabled,
     Mode,
     StartingLevel,
+    MusicEnabled,
     StartGame
 };
 

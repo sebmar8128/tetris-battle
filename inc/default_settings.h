@@ -37,6 +37,7 @@ inline MatchSettings matchSettings() {
     settings.garbageEnabled = true;
     settings.mode = GameMode::Marathon;
     settings.startingLevel = 0;
+    settings.musicEnabled = true;
     return settings;
 }
 

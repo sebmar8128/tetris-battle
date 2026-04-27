@@ -113,6 +113,8 @@ void GameController::begin() {
 
     outboundHead_ = 0;
     outboundCount_ = 0;
+    musicHead_ = 0;
+    musicCount_ = 0;
 
     queuePresencePacket();
 }
@@ -175,6 +177,17 @@ bool GameController::popOutboundPacket(NetPacket& packet) {
     packet = outboundPackets_[outboundHead_];
     outboundHead_ = (outboundHead_ + 1) % OUTBOUND_PACKET_CAPACITY;
     --outboundCount_;
+    return true;
+}
+
+bool GameController::popMusicEvent(MusicEvent& event) {
+    if (musicCount_ == 0) {
+        return false;
+    }
+
+    event = musicEvents_[musicHead_];
+    musicHead_ = (musicHead_ + 1) % MUSIC_EVENT_CAPACITY;
+    --musicCount_;
     return true;
 }
 
@@ -323,12 +336,12 @@ bool GameController::handleLobbyInput(const InputEvent& event) {
     }
 
     if (isMenuUp(event.button)) {
-        lobbySelection_ = nextEnumValue(lobbySelection_, -1, 4);
+        lobbySelection_ = nextEnumValue(lobbySelection_, -1, 5);
         return true;
     }
 
     if (isMenuDown(event.button)) {
-        lobbySelection_ = nextEnumValue(lobbySelection_, 1, 4);
+        lobbySelection_ = nextEnumValue(lobbySelection_, 1, 5);
         return true;
     }
 
@@ -359,6 +372,10 @@ bool GameController::handleLobbyInput(const InputEvent& event) {
                 changed = true;
                 break;
             }
+            case LobbyMenuItem::MusicEnabled:
+                matchSettings_.musicEnabled = !matchSettings_.musicEnabled;
+                changed = true;
+                break;
             case LobbyMenuItem::StartGame:
                 break;
         }
@@ -748,6 +765,17 @@ bool GameController::queueOutboundPacket(const NetPacket& packet) {
     return true;
 }
 
+bool GameController::queueMusicEvent(MusicEventType type) {
+    if (musicCount_ >= MUSIC_EVENT_CAPACITY) {
+        return false;
+    }
+
+    const uint8_t tail = (musicHead_ + musicCount_) % MUSIC_EVENT_CAPACITY;
+    musicEvents_[tail] = {type};
+    ++musicCount_;
+    return true;
+}
+
 void GameController::queuePresencePacket() {
     NetPacket packet = {};
     packet.header.protocolVersion = NET_PROTOCOL_VERSION;
@@ -916,6 +944,7 @@ void GameController::beginGame(uint32_t seed, const MatchSettings& settings) {
     pendingOutgoingPostGameAction_ = {};
     localGameOverPacketQueued_ = false;
 
+    (void)queueMusicEvent(matchSettings_.musicEnabled ? MusicEventType::Start : MusicEventType::Stop);
     queuePresencePacket();
 }
 
@@ -949,6 +978,7 @@ void GameController::returnToLobby() {
     pendingOutgoingPostGameAction_ = {};
     localGameOverPacketQueued_ = false;
 
+    (void)queueMusicEvent(MusicEventType::Stop);
     queuePresencePacket();
 }
 
@@ -960,6 +990,7 @@ void GameController::enterPaused(uint8_t pauseId) {
     pauseConfirmAcceptSelected_ = true;
     pendingIncomingPauseAction_ = {};
     pendingOutgoingPauseAction_ = {};
+    (void)queueMusicEvent(MusicEventType::Pause);
     queuePresencePacket();
 }
 
@@ -970,6 +1001,7 @@ void GameController::executePauseAction(PauseMenuAction action, uint32_t restart
     switch (action) {
         case PauseMenuAction::Resume:
             phase_ = GamePhase::Gameplay;
+            (void)queueMusicEvent(matchSettings_.musicEnabled ? MusicEventType::Resume : MusicEventType::Stop);
             queuePresencePacket();
             return;
         case PauseMenuAction::Restart:
@@ -1004,6 +1036,7 @@ void GameController::finalizeLocalGameOver(GameOverReason reason) {
     localGameOverReason_ = reason;
     localFinishedBeforeRemote_ = !remoteTerminal_;
     phase_ = GamePhase::GameOver;
+    (void)queueMusicEvent(MusicEventType::Stop);
     queueGameOverPacket();
     queuePresencePacket();
     updatePostGameState();

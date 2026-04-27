@@ -4,6 +4,7 @@
 
 #include "events.h"
 #include "game_engine.h"
+#include "music.h"
 
 class GameController {
 public:
@@ -12,12 +13,14 @@ public:
     bool handleRemoteEvent(const RemoteEvent& event);
     bool tick(uint32_t nowMs);
     bool popOutboundPacket(NetPacket& packet);
+    bool popMusicEvent(MusicEvent& event);
 
     void makeDisplayConfigEvent(RenderEvent& event) const;
     void makeScreenRenderEvent(RenderEvent& event) const;
 
 private:
     static constexpr uint8_t OUTBOUND_PACKET_CAPACITY = 12;
+    static constexpr uint8_t MUSIC_EVENT_CAPACITY = 8;
 
     struct StartRequestState {
         bool valid;
@@ -63,6 +66,7 @@ private:
 
     bool handleStepResult(const GameEngine::StepResult& result);
     bool queueOutboundPacket(const NetPacket& packet);
+    bool queueMusicEvent(MusicEventType type);
     void queuePresencePacket();
     void queueLobbySettingsPacket();
     void queueStartGameRequestPacket(uint32_t seed);
@@ -142,4 +146,8 @@ private:
     NetPacket outboundPackets_[OUTBOUND_PACKET_CAPACITY];
     uint8_t outboundHead_;
     uint8_t outboundCount_;
+
+    MusicEvent musicEvents_[MUSIC_EVENT_CAPACITY];
+    uint8_t musicHead_;
+    uint8_t musicCount_;
 };

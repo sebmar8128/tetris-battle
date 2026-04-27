@@ -90,7 +90,7 @@ constexpr int16_t LOBBY_TOP_Y = 44;
 constexpr int16_t LOBBY_MATCH_X = 56;
 constexpr int16_t LOBBY_MATCH_Y = 188;
 constexpr int16_t LOBBY_MATCH_W = 368;
-constexpr int16_t LOBBY_MATCH_H = 112;
+constexpr int16_t LOBBY_MATCH_H = 128;
 constexpr int16_t LOBBY_MATCH_LABEL_X = 86;
 constexpr int16_t LOBBY_MATCH_VALUE_X = 288;
 constexpr uint8_t LOBBY_NAME_FONT = 4;
@@ -409,7 +409,8 @@ bool stringsEqual(const char* a, const char* b) {
 bool matchSettingsEqual(const MatchSettings& a, const MatchSettings& b) {
     return a.garbageEnabled == b.garbageEnabled &&
            a.mode == b.mode &&
-           a.startingLevel == b.startingLevel;
+           a.startingLevel == b.startingLevel &&
+           a.musicEnabled == b.musicEnabled;
 }
 
 bool lobbyProfileChanged(const LobbyRenderState& previous, const LobbyRenderState& current, bool local) {
@@ -446,6 +447,8 @@ bool lobbyMatchRowValueChanged(const LobbyRenderState& previous, const LobbyRend
         case 2:
             return previous.matchSettings.startingLevel != current.matchSettings.startingLevel;
         case 3:
+            return previous.matchSettings.musicEnabled != current.matchSettings.musicEnabled;
+        case 4:
             return previous.remoteStatus != current.remoteStatus;
     }
 
@@ -799,6 +802,7 @@ void drawLobbyMatchRow(const LobbyRenderState& lobby, uint8_t row, const ThemePa
         "Garbage",
         "Mode",
         "Start level",
+        "Music",
         "Start game"
     };
 
@@ -806,6 +810,7 @@ void drawLobbyMatchRow(const LobbyRenderState& lobby, uint8_t row, const ThemePa
         lobby.matchSettings.garbageEnabled ? "On" : "Off",
         gameModeLabel(lobby.matchSettings.mode),
         "",
+        lobby.matchSettings.musicEnabled ? "On" : "Off",
         lobby.remoteStatus == LobbyPeerStatus::InLobby ? "Ready" : "Peer not ready"
     };
 
@@ -841,7 +846,7 @@ void drawLobbyMatchRow(const LobbyRenderState& lobby, uint8_t row, const ThemePa
 
 void drawLobbyMatchPanel(const LobbyRenderState& lobby, const ThemePalette& palette) {
     drawLobbyMatchPanelFrame(palette);
-    for (uint8_t row = 0; row < 4; ++row) {
+    for (uint8_t row = 0; row < 5; ++row) {
         drawLobbyMatchRow(lobby, row, palette);
     }
 }
@@ -910,7 +915,7 @@ void renderLobby(const LobbyRenderState& lobby) {
         }
 
         if (lobbyMatchPanelChanged(lobbyCache.lobby, lobby)) {
-            for (uint8_t row = 0; row < 4; ++row) {
+            for (uint8_t row = 0; row < 5; ++row) {
                 const bool selectionChanged = lobbyCache.lobby.selectedItem == static_cast<LobbyMenuItem>(row) ||
                                              lobby.selectedItem == static_cast<LobbyMenuItem>(row);
                 if (selectionChanged || lobbyMatchRowValueChanged(lobbyCache.lobby, lobby, row)) {
