@@ -27,7 +27,7 @@ inline UserSettings userSettings() {
     settings.theme = ThemeId::Modern;
     settings.holdEnabled = true;
     settings.ghostEnabled = true;
-    settings.nextPreviewCount = MAX_NEXT_PIECES;
+    settings.nextPreviewCount = 1;
 
     return settings;
 }
