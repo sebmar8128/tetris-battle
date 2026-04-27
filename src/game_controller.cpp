@@ -3,14 +3,22 @@
 #include <string.h>
 
 #include "default_settings.h"
+#include "queues.h"
 
 namespace {
 
 constexpr char UNKNOWN_REMOTE_USERNAME[] = "REMOTE";
 constexpr uint8_t MAX_STARTING_LEVEL = 29;
+constexpr uint8_t USER_SETTINGS_ITEM_COUNT = 7;
+constexpr uint8_t USERNAME_ENTRY_ITEM_COUNT = 3;
+constexpr char USERNAME_BLANK = ' ';
 
 PresenceState presenceForPhase(GamePhase phase) {
     switch (phase) {
+        case GamePhase::Welcome:
+        case GamePhase::UsernameEntry:
+        case GamePhase::UserSettings:
+            return PresenceState::NotInLobby;
         case GamePhase::Lobby: return PresenceState::InLobby;
         case GamePhase::Gameplay: return PresenceState::Gameplay;
         case GamePhase::Paused: return PresenceState::Paused;
@@ -46,6 +54,37 @@ bool isMenuDown(PhysicalButton button) {
     return button == PhysicalButton::LdDown || button == PhysicalButton::RdDown;
 }
 
+bool userSettingsEqual(const UserSettings& a, const UserSettings& b) {
+    return strncmp(a.username, b.username, MAX_USERNAME_LEN + 1) == 0 &&
+           a.theme == b.theme &&
+           a.holdEnabled == b.holdEnabled &&
+           a.ghostEnabled == b.ghostEnabled &&
+           a.nextPreviewCount == b.nextPreviewCount;
+}
+
+uint8_t usernameLength(const char* username) {
+    uint8_t length = 0;
+    while (length < MAX_USERNAME_LEN && username[length] != '\0') {
+        ++length;
+    }
+    return length;
+}
+
+bool usernameIsValid(const char* username) {
+    const uint8_t length = usernameLength(username);
+    if (length == 0) {
+        return false;
+    }
+
+    for (uint8_t i = 0; i < length; ++i) {
+        if (username[i] < 'A' || username[i] > 'Z') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 template <typename EnumType>
 EnumType nextEnumValue(EnumType current, int8_t delta, uint8_t count) {
     int16_t value = static_cast<int16_t>(current) + delta;
@@ -62,11 +101,29 @@ EnumType nextEnumValue(EnumType current, int8_t delta, uint8_t count) {
 
 void GameController::begin() {
     userSettings_ = DefaultSettings::userSettings();
+    draftUserSettings_ = userSettings_;
     matchSettings_ = DefaultSettings::matchSettings();
 
-    phase_ = GamePhase::Lobby;
+    phase_ = GamePhase::Welcome;
     localDeviceId_ = 0;
     transportReady_ = false;
+
+    welcomeSelection_ = WelcomeMenuItem::SignIn;
+    usernameEntryMode_ = UsernameEntryMode::SignIn;
+    usernameEntrySelection_ = UsernameEntryItem::Letters;
+    usernameEntryMessage_ = UsernameEntryMessage::None;
+    strncpy(usernameDraft_, "A", MAX_USERNAME_LEN);
+    usernameDraft_[1] = '\0';
+    usernameCursorIndex_ = 0;
+    usernameSlotActive_ = false;
+    storageBusy_ = false;
+    displayConfigDirty_ = true;
+    pendingStorageOperation_ = StorageOperation::Load;
+    pendingStorageMode_ = UsernameEntryMode::SignIn;
+    pendingSaveSettings_ = {};
+    userSettingsSelection_ = UserSettingsMenuItem::Theme;
+    pendingUserSettingsExit_ = UserSettingsExitAction::None;
+    userSettingsConfirmContinueSelected_ = false;
 
     remoteOnline_ = false;
     remoteDeviceId_ = 0;
@@ -115,12 +172,16 @@ void GameController::begin() {
     outboundCount_ = 0;
     musicHead_ = 0;
     musicCount_ = 0;
-
-    queuePresencePacket();
 }
 
 bool GameController::handleInputEvent(const InputEvent& event) {
     switch (phase_) {
+        case GamePhase::Welcome:
+            return handleWelcomeInput(event);
+        case GamePhase::UsernameEntry:
+            return handleUsernameEntryInput(event);
+        case GamePhase::UserSettings:
+            return handleUserSettingsInput(event);
         case GamePhase::Lobby:
             return handleLobbyInput(event);
         case GamePhase::Gameplay:
@@ -161,6 +222,66 @@ bool GameController::handleRemoteEvent(const RemoteEvent& event) {
     return false;
 }
 
+bool GameController::handleStorageResponse(const StorageResponse& response) {
+    if (!storageBusy_ || response.key != StorageKey::UserSettings) {
+        return false;
+    }
+
+    const StorageOperation operation = pendingStorageOperation_;
+    const UsernameEntryMode mode = pendingStorageMode_;
+    const UserSettings pendingSaveSettings = pendingSaveSettings_;
+    resetStoragePending();
+
+    if (operation == StorageOperation::Load) {
+        if (mode == UsernameEntryMode::SignIn) {
+            if (response.status == StorageStatus::Success) {
+                enterUserSettings(response.payload.userSettings);
+            } else {
+                usernameEntryMessage_ = response.status == StorageStatus::NotFound
+                    ? UsernameEntryMessage::UserNotFound
+                    : UsernameEntryMessage::StorageFailed;
+            }
+            return true;
+        }
+
+        if (response.status == StorageStatus::Success) {
+            usernameEntryMessage_ = UsernameEntryMessage::UserExists;
+            return true;
+        }
+
+        if (response.status != StorageStatus::NotFound) {
+            usernameEntryMessage_ = UsernameEntryMessage::StorageFailed;
+            return true;
+        }
+
+        UserSettings newSettings = DefaultSettings::userSettings();
+        strncpy(newSettings.username, usernameDraft_, MAX_USERNAME_LEN);
+        newSettings.username[MAX_USERNAME_LEN] = '\0';
+        queueUserSave(newSettings);
+        pendingStorageMode_ = UsernameEntryMode::NewUser;
+        return true;
+    }
+
+    if (operation == StorageOperation::Save) {
+        if (response.status == StorageStatus::Success) {
+            userSettings_ = pendingSaveSettings;
+            draftUserSettings_ = pendingSaveSettings;
+            displayConfigDirty_ = true;
+            pendingUserSettingsExit_ = UserSettingsExitAction::None;
+            usernameEntryMessage_ = UsernameEntryMessage::None;
+
+            if (phase_ == GamePhase::UsernameEntry) {
+                enterUserSettings(userSettings_);
+            }
+        } else if (phase_ == GamePhase::UsernameEntry) {
+            usernameEntryMessage_ = UsernameEntryMessage::StorageFailed;
+        }
+        return true;
+    }
+
+    return false;
+}
+
 bool GameController::tick(uint32_t nowMs) {
     if (phase_ != GamePhase::Gameplay || localTerminal_) {
         return false;
@@ -191,6 +312,15 @@ bool GameController::popMusicEvent(MusicEvent& event) {
     return true;
 }
 
+bool GameController::consumeDisplayConfigDirty() {
+    if (!displayConfigDirty_) {
+        return false;
+    }
+
+    displayConfigDirty_ = false;
+    return true;
+}
+
 void GameController::makeDisplayConfigEvent(RenderEvent& event) const {
     event = {};
     event.type = RenderEventType::Config;
@@ -207,6 +337,42 @@ void GameController::makeScreenRenderEvent(RenderEvent& event) const {
     event.type = RenderEventType::Screen;
 
     switch (phase_) {
+        case GamePhase::Welcome:
+            event.payload.screen.screen = RenderScreen::Welcome;
+            event.payload.screen.payload.welcome = {
+                welcomeSelection_
+            };
+            return;
+
+        case GamePhase::UsernameEntry:
+            event.payload.screen.screen = RenderScreen::UsernameEntry;
+            event.payload.screen.payload.usernameEntry = {};
+            event.payload.screen.payload.usernameEntry.mode = usernameEntryMode_;
+            strncpy(event.payload.screen.payload.usernameEntry.username, usernameDraft_, MAX_USERNAME_LEN);
+            event.payload.screen.payload.usernameEntry.username[MAX_USERNAME_LEN] = '\0';
+            event.payload.screen.payload.usernameEntry.cursorIndex = usernameCursorIndex_;
+            event.payload.screen.payload.usernameEntry.slotActive = usernameSlotActive_;
+            event.payload.screen.payload.usernameEntry.selectedItem = usernameEntrySelection_;
+            event.payload.screen.payload.usernameEntry.message = usernameEntryMessage_;
+            event.payload.screen.payload.usernameEntry.busy = storageBusy_;
+            return;
+
+        case GamePhase::UserSettings:
+            event.payload.screen.screen = RenderScreen::UserSettings;
+            event.payload.screen.payload.userSettings = {};
+            strncpy(event.payload.screen.payload.userSettings.username, draftUserSettings_.username, MAX_USERNAME_LEN);
+            event.payload.screen.payload.userSettings.username[MAX_USERNAME_LEN] = '\0';
+            event.payload.screen.payload.userSettings.settings = draftUserSettings_;
+            event.payload.screen.payload.userSettings.selectedItem = userSettingsSelection_;
+            event.payload.screen.payload.userSettings.modalState = pendingUserSettingsExit_ == UserSettingsExitAction::None
+                ? ModalState::None
+                : ModalState::UnsavedSettings;
+            event.payload.screen.payload.userSettings.pendingExitAction = pendingUserSettingsExit_;
+            event.payload.screen.payload.userSettings.confirmContinueSelected = userSettingsConfirmContinueSelected_;
+            event.payload.screen.payload.userSettings.dirty = userSettingsDirty();
+            event.payload.screen.payload.userSettings.busy = storageBusy_;
+            return;
+
         case GamePhase::Lobby:
             event.payload.screen.screen = RenderScreen::Lobby;
             strncpy(event.payload.screen.payload.lobby.localUsername, userSettings_.username, MAX_USERNAME_LEN);
@@ -298,6 +464,211 @@ bool GameController::handleGameplayInput(const InputEvent& event) {
 
     if (event.type == InputEventType::Repeat && mapsToRepeatAction(event.button, action)) {
         return handleStepResult(engine_.applyAction(action, event.tickMs));
+    }
+
+    return false;
+}
+
+bool GameController::handleWelcomeInput(const InputEvent& event) {
+    if (event.type != InputEventType::Press && event.type != InputEventType::Repeat) {
+        return false;
+    }
+
+    if (isNavigationEvent(event)) {
+        welcomeSelection_ = welcomeSelection_ == WelcomeMenuItem::SignIn
+            ? WelcomeMenuItem::NewUser
+            : WelcomeMenuItem::SignIn;
+        return true;
+    }
+
+    if (!isSelectEvent(event)) {
+        return false;
+    }
+
+    enterUsernameEntry(
+        welcomeSelection_ == WelcomeMenuItem::SignIn
+            ? UsernameEntryMode::SignIn
+            : UsernameEntryMode::NewUser
+    );
+    return true;
+}
+
+bool GameController::handleUsernameEntryInput(const InputEvent& event) {
+    if (storageBusy_) {
+        return false;
+    }
+
+    if (event.type != InputEventType::Press && event.type != InputEventType::Repeat) {
+        return false;
+    }
+
+    if (usernameSlotActive_) {
+        if (isMenuLeft(event.button) || isMenuRight(event.button)) {
+            return applyUsernameSlotDelta(isMenuRight(event.button) ? 1 : -1);
+        }
+
+        if (isSelectEvent(event)) {
+            usernameSlotActive_ = false;
+            normalizeUsernameCursorAfterEdit();
+            return true;
+        }
+
+        return false;
+    }
+
+    if (isMenuUp(event.button) || isMenuDown(event.button)) {
+        usernameEntrySelection_ = nextEnumValue(
+            usernameEntrySelection_,
+            isMenuDown(event.button) ? 1 : -1,
+            USERNAME_ENTRY_ITEM_COUNT
+        );
+        usernameEntryMessage_ = UsernameEntryMessage::None;
+        return true;
+    }
+
+    if (usernameEntrySelection_ == UsernameEntryItem::Letters &&
+        (isMenuLeft(event.button) || isMenuRight(event.button))) {
+        const int8_t delta = isMenuRight(event.button) ? 1 : -1;
+        const uint8_t length = usernameLength(usernameDraft_);
+        const uint8_t maxIndex = min<uint8_t>(MAX_USERNAME_LEN - 1, length);
+        int16_t index = static_cast<int16_t>(usernameCursorIndex_) + delta;
+        if (index < 0) {
+            index = maxIndex;
+        } else if (index > maxIndex) {
+            index = 0;
+        }
+        usernameCursorIndex_ = static_cast<uint8_t>(index);
+        usernameEntryMessage_ = UsernameEntryMessage::None;
+        return true;
+    }
+
+    if (!isSelectEvent(event)) {
+        return false;
+    }
+
+    switch (usernameEntrySelection_) {
+        case UsernameEntryItem::Letters:
+            setUsernameDraftFromCurrentLength();
+            usernameSlotActive_ = true;
+            usernameEntryMessage_ = UsernameEntryMessage::None;
+            return true;
+
+        case UsernameEntryItem::Continue:
+            if (!usernameIsValid(usernameDraft_)) {
+                return false;
+            }
+            queueUserLoad(usernameDraft_);
+            return true;
+
+        case UsernameEntryItem::Back:
+            enterWelcome();
+            return true;
+    }
+
+    return false;
+}
+
+bool GameController::handleUserSettingsInput(const InputEvent& event) {
+    if (storageBusy_) {
+        return false;
+    }
+
+    if (pendingUserSettingsExit_ != UserSettingsExitAction::None) {
+        if (isNavigationEvent(event)) {
+            userSettingsConfirmContinueSelected_ = !userSettingsConfirmContinueSelected_;
+            return true;
+        }
+
+        if (!isSelectEvent(event)) {
+            return false;
+        }
+
+        if (userSettingsConfirmContinueSelected_) {
+            const UserSettingsExitAction action = pendingUserSettingsExit_;
+            pendingUserSettingsExit_ = UserSettingsExitAction::None;
+            if (action == UserSettingsExitAction::JoinLobby) {
+                joinLobbyFromSettings();
+            } else {
+                signOutFromSettings();
+            }
+        } else {
+            pendingUserSettingsExit_ = UserSettingsExitAction::None;
+        }
+        return true;
+    }
+
+    if (event.type != InputEventType::Press && event.type != InputEventType::Repeat) {
+        return false;
+    }
+
+    if (isMenuUp(event.button) || isMenuDown(event.button)) {
+        userSettingsSelection_ = nextEnumValue(
+            userSettingsSelection_,
+            isMenuDown(event.button) ? 1 : -1,
+            USER_SETTINGS_ITEM_COUNT
+        );
+        return true;
+    }
+
+    if (isMenuLeft(event.button) || isMenuRight(event.button)) {
+        const int8_t delta = isMenuRight(event.button) ? 1 : -1;
+        switch (userSettingsSelection_) {
+            case UserSettingsMenuItem::Theme:
+                draftUserSettings_.theme = nextEnumValue(draftUserSettings_.theme, delta, 3);
+                return true;
+            case UserSettingsMenuItem::HoldEnabled:
+                draftUserSettings_.holdEnabled = !draftUserSettings_.holdEnabled;
+                return true;
+            case UserSettingsMenuItem::GhostEnabled:
+                draftUserSettings_.ghostEnabled = !draftUserSettings_.ghostEnabled;
+                return true;
+            case UserSettingsMenuItem::NextPreviewCount:
+            {
+                int16_t count = static_cast<int16_t>(draftUserSettings_.nextPreviewCount) + delta;
+                if (count < 0) {
+                    count = MAX_NEXT_PIECES;
+                } else if (count > MAX_NEXT_PIECES) {
+                    count = 0;
+                }
+                draftUserSettings_.nextPreviewCount = static_cast<uint8_t>(count);
+                return true;
+            }
+            case UserSettingsMenuItem::SaveSettings:
+            case UserSettingsMenuItem::JoinLobby:
+            case UserSettingsMenuItem::SignOut:
+                return false;
+        }
+    }
+
+    if (!isSelectEvent(event)) {
+        return false;
+    }
+
+    switch (userSettingsSelection_) {
+        case UserSettingsMenuItem::SaveSettings:
+            queueUserSave(draftUserSettings_);
+            return true;
+        case UserSettingsMenuItem::JoinLobby:
+            if (userSettingsDirty()) {
+                pendingUserSettingsExit_ = UserSettingsExitAction::JoinLobby;
+                userSettingsConfirmContinueSelected_ = false;
+            } else {
+                joinLobbyFromSettings();
+            }
+            return true;
+        case UserSettingsMenuItem::SignOut:
+            if (userSettingsDirty()) {
+                pendingUserSettingsExit_ = UserSettingsExitAction::SignOut;
+                userSettingsConfirmContinueSelected_ = false;
+            } else {
+                signOutFromSettings();
+            }
+            return true;
+        case UserSettingsMenuItem::Theme:
+        case UserSettingsMenuItem::HoldEnabled:
+        case UserSettingsMenuItem::GhostEnabled:
+        case UserSettingsMenuItem::NextPreviewCount:
+            return false;
     }
 
     return false;
@@ -907,6 +1278,96 @@ void GameController::queueGameOverPacket() {
     localGameOverPacketQueued_ = queueOutboundPacket(packet);
 }
 
+void GameController::queueUserLoad(const char* username) {
+    StorageRequest request = {};
+    request.operation = StorageOperation::Load;
+    request.key = StorageKey::UserSettings;
+    strncpy(request.localUsername, username, MAX_USERNAME_LEN);
+    request.localUsername[MAX_USERNAME_LEN] = '\0';
+
+    if (xQueueSend(g_storageRequestQueue, &request, 0) == pdTRUE) {
+        storageBusy_ = true;
+        pendingStorageOperation_ = StorageOperation::Load;
+        pendingStorageMode_ = usernameEntryMode_;
+        usernameEntryMessage_ = UsernameEntryMessage::None;
+    } else {
+        usernameEntryMessage_ = UsernameEntryMessage::StorageFailed;
+    }
+}
+
+void GameController::queueUserSave(const UserSettings& settings) {
+    StorageRequest request = {};
+    request.operation = StorageOperation::Save;
+    request.key = StorageKey::UserSettings;
+    strncpy(request.localUsername, settings.username, MAX_USERNAME_LEN);
+    request.localUsername[MAX_USERNAME_LEN] = '\0';
+    request.payload.userSettings = settings;
+
+    if (xQueueSend(g_storageRequestQueue, &request, 0) == pdTRUE) {
+        storageBusy_ = true;
+        pendingStorageOperation_ = StorageOperation::Save;
+        pendingStorageMode_ = usernameEntryMode_;
+        pendingSaveSettings_ = settings;
+        usernameEntryMessage_ = UsernameEntryMessage::None;
+    } else {
+        usernameEntryMessage_ = UsernameEntryMessage::StorageFailed;
+    }
+}
+
+void GameController::enterWelcome() {
+    phase_ = GamePhase::Welcome;
+    welcomeSelection_ = WelcomeMenuItem::SignIn;
+    resetStoragePending();
+    usernameEntryMessage_ = UsernameEntryMessage::None;
+    pendingUserSettingsExit_ = UserSettingsExitAction::None;
+    displayConfigDirty_ = true;
+    remoteOnline_ = false;
+    remotePresenceState_ = PresenceState::NotInLobby;
+    queuePresencePacket();
+}
+
+void GameController::enterUsernameEntry(UsernameEntryMode mode) {
+    phase_ = GamePhase::UsernameEntry;
+    usernameEntryMode_ = mode;
+    usernameEntrySelection_ = UsernameEntryItem::Letters;
+    usernameEntryMessage_ = UsernameEntryMessage::None;
+    strncpy(usernameDraft_, "A", MAX_USERNAME_LEN);
+    usernameDraft_[1] = '\0';
+    usernameCursorIndex_ = 0;
+    usernameSlotActive_ = false;
+    resetStoragePending();
+}
+
+void GameController::enterUserSettings(const UserSettings& settings) {
+    userSettings_ = settings;
+    userSettings_.username[MAX_USERNAME_LEN] = '\0';
+    userSettings_.nextPreviewCount = min(userSettings_.nextPreviewCount, MAX_NEXT_PIECES);
+    draftUserSettings_ = userSettings_;
+    phase_ = GamePhase::UserSettings;
+    userSettingsSelection_ = UserSettingsMenuItem::Theme;
+    pendingUserSettingsExit_ = UserSettingsExitAction::None;
+    userSettingsConfirmContinueSelected_ = false;
+    displayConfigDirty_ = true;
+    resetStoragePending();
+}
+
+void GameController::joinLobbyFromSettings() {
+    draftUserSettings_ = userSettings_;
+    phase_ = GamePhase::Lobby;
+    lobbySelection_ = LobbyMenuItem::GarbageEnabled;
+    lobbyModalState_ = ModalState::None;
+    lobbyConfirmAcceptSelected_ = true;
+    pendingIncomingStart_ = {};
+    pendingOutgoingStart_ = {};
+    queuePresencePacket();
+}
+
+void GameController::signOutFromSettings() {
+    userSettings_ = DefaultSettings::userSettings();
+    draftUserSettings_ = userSettings_;
+    enterWelcome();
+}
+
 void GameController::beginGame(uint32_t seed, const MatchSettings& settings) {
     matchSettings_ = settings;
     currentSeed_ = seed;
@@ -1087,6 +1548,91 @@ int8_t GameController::navigationDelta(const InputEvent& event) const {
 
 bool GameController::isSelectEvent(const InputEvent& event) const {
     return event.button == PhysicalButton::Center && event.type == InputEventType::Press;
+}
+
+bool GameController::userSettingsDirty() const {
+    return !userSettingsEqual(userSettings_, draftUserSettings_);
+}
+
+bool GameController::applyUsernameSlotDelta(int8_t delta) {
+    char current = usernameDraft_[usernameCursorIndex_];
+    const bool allowBlank = usernameCursorIndex_ > 0;
+
+    int16_t value;
+    if (current == '\0' || current == USERNAME_BLANK) {
+        value = allowBlank ? 26 : 0;
+    } else {
+        value = current - 'A';
+    }
+
+    const int16_t count = allowBlank ? 27 : 26;
+    value += delta;
+    while (value < 0) {
+        value += count;
+    }
+    while (value >= count) {
+        value -= count;
+    }
+
+    if (allowBlank && value == 26) {
+        usernameDraft_[usernameCursorIndex_] = '\0';
+        if (usernameCursorIndex_ > 0) {
+            --usernameCursorIndex_;
+        }
+    } else {
+        usernameDraft_[usernameCursorIndex_] = static_cast<char>('A' + value);
+        if (usernameCursorIndex_ == usernameLength(usernameDraft_) - 1 &&
+            usernameCursorIndex_ + 1 < MAX_USERNAME_LEN) {
+            usernameDraft_[usernameCursorIndex_ + 1] = '\0';
+        }
+    }
+
+    normalizeUsernameCursorAfterEdit();
+    usernameEntryMessage_ = UsernameEntryMessage::None;
+    return true;
+}
+
+void GameController::normalizeUsernameCursorAfterEdit() {
+    usernameDraft_[MAX_USERNAME_LEN] = '\0';
+    uint8_t length = usernameLength(usernameDraft_);
+    if (length == 0) {
+        usernameDraft_[0] = 'A';
+        usernameDraft_[1] = '\0';
+        length = 1;
+    }
+
+    for (uint8_t i = 0; i < MAX_USERNAME_LEN; ++i) {
+        if (usernameDraft_[i] == USERNAME_BLANK) {
+            usernameDraft_[i] = '\0';
+            length = i;
+            break;
+        }
+    }
+
+    if (length == 0) {
+        usernameDraft_[0] = 'A';
+        usernameDraft_[1] = '\0';
+        length = 1;
+    }
+
+    const uint8_t maxCursor = min<uint8_t>(MAX_USERNAME_LEN - 1, length);
+    if (usernameCursorIndex_ > maxCursor) {
+        usernameCursorIndex_ = maxCursor;
+    }
+}
+
+void GameController::setUsernameDraftFromCurrentLength() {
+    const uint8_t length = usernameLength(usernameDraft_);
+    if (usernameCursorIndex_ == length && length < MAX_USERNAME_LEN) {
+        usernameDraft_[usernameCursorIndex_] = 'A';
+        usernameDraft_[usernameCursorIndex_ + 1] = '\0';
+    }
+}
+
+void GameController::resetStoragePending() {
+    storageBusy_ = false;
+    pendingStorageOperation_ = StorageOperation::Load;
+    pendingStorageMode_ = UsernameEntryMode::SignIn;
 }
 
 bool GameController::mapsToAction(PhysicalButton button, GameEngine::Action& action) const {

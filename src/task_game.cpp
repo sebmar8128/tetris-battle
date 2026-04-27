@@ -4,17 +4,6 @@
 #include "queues.h"
 #include "tasks.h"
 
-namespace {
-
-void discardUnusedQueues() {
-    StorageResponse storageResponse;
-
-    while (xQueueReceive(g_storageResponseQueue, &storageResponse, 0) == pdTRUE) {
-    }
-}
-
-}  // namespace
-
 void gameTask(void* pvParameters) {
     (void)pvParameters;
 
@@ -24,6 +13,7 @@ void gameTask(void* pvParameters) {
     RenderEvent renderEvent = {};
     controller.makeDisplayConfigEvent(renderEvent);
     (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
+    (void)controller.consumeDisplayConfigDirty();
     vTaskDelay(pdMS_TO_TICKS(25));
     controller.makeScreenRenderEvent(renderEvent);
     (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
@@ -44,7 +34,10 @@ void gameTask(void* pvParameters) {
             stateChanged = controller.handleRemoteEvent(remoteEvent) || stateChanged;
         }
 
-        discardUnusedQueues();
+        StorageResponse storageResponse;
+        while (xQueueReceive(g_storageResponseQueue, &storageResponse, 0) == pdTRUE) {
+            stateChanged = controller.handleStorageResponse(storageResponse) || stateChanged;
+        }
 
         stateChanged = controller.tick(nowMs) || stateChanged;
 
@@ -56,6 +49,12 @@ void gameTask(void* pvParameters) {
         MusicEvent musicEvent;
         while (controller.popMusicEvent(musicEvent)) {
             (void)xQueueSend(g_musicEventQueue, &musicEvent, 0);
+        }
+
+        if (controller.consumeDisplayConfigDirty()) {
+            controller.makeDisplayConfigEvent(renderEvent);
+            (void)xQueueOverwrite(g_renderEventQueue, &renderEvent);
+            vTaskDelay(pdMS_TO_TICKS(1));
         }
 
         if (stateChanged) {

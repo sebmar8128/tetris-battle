@@ -40,6 +40,9 @@ enum class PresenceState : uint8_t {
 };
 
 enum class GamePhase : uint8_t {
+    Welcome,
+    UsernameEntry,
+    UserSettings,
     Lobby,
     Gameplay,
     Paused,
@@ -49,7 +52,8 @@ enum class GamePhase : uint8_t {
 enum class ModalState : uint8_t {
     None,
     OutgoingRequest,
-    IncomingRequest
+    IncomingRequest,
+    UnsavedSettings
 };
 
 enum class LobbyPeerStatus : uint8_t {
@@ -67,6 +71,45 @@ enum class PauseMenuAction : uint8_t {
 enum class PostGameMenuAction : uint8_t {
     Restart,
     Quit
+};
+
+enum class WelcomeMenuItem : uint8_t {
+    SignIn,
+    NewUser
+};
+
+enum class UsernameEntryMode : uint8_t {
+    SignIn,
+    NewUser
+};
+
+enum class UsernameEntryItem : uint8_t {
+    Letters,
+    Continue,
+    Back
+};
+
+enum class UsernameEntryMessage : uint8_t {
+    None,
+    UserExists,
+    UserNotFound,
+    StorageFailed
+};
+
+enum class UserSettingsMenuItem : uint8_t {
+    Theme,
+    HoldEnabled,
+    GhostEnabled,
+    NextPreviewCount,
+    SaveSettings,
+    JoinLobby,
+    SignOut
+};
+
+enum class UserSettingsExitAction : uint8_t {
+    None,
+    JoinLobby,
+    SignOut
 };
 
 enum class GameOverReason : uint8_t {

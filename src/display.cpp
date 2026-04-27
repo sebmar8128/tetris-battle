@@ -46,12 +46,30 @@ struct LobbyRenderCache {
     LobbyRenderState lobby;
 };
 
+struct WelcomeRenderCache {
+    bool valid;
+    WelcomeRenderState welcome;
+};
+
+struct UsernameEntryRenderCache {
+    bool valid;
+    UsernameEntryRenderState usernameEntry;
+};
+
+struct UserSettingsRenderCache {
+    bool valid;
+    UserSettingsRenderState userSettings;
+};
+
 TFT_eSPI tft;
 bool initialized = false;
 bool hasCurrentScreen = false;
 RenderScreen currentScreen = RenderScreen::Gameplay;
 GameplayRenderCache gameplayCache = {};
 LobbyRenderCache lobbyCache = {};
+WelcomeRenderCache welcomeCache = {};
+UsernameEntryRenderCache usernameEntryCache = {};
+UserSettingsRenderCache userSettingsCache = {};
 
 DisplayRenderConfig renderConfig = {
     ThemeId::Modern,
@@ -102,6 +120,13 @@ constexpr int16_t LOBBY_BG_STRIDE_X = 44;
 constexpr int16_t LOBBY_BG_STRIDE_Y = 36;
 constexpr int16_t LOBBY_BG_OFFSET_X = 6;
 constexpr int16_t LOBBY_BG_OFFSET_Y = 20;
+constexpr int16_t MENU_PANEL_X = 88;
+constexpr int16_t MENU_PANEL_Y = 88;
+constexpr int16_t MENU_PANEL_W = 304;
+constexpr int16_t MENU_PANEL_H = 176;
+constexpr int16_t MENU_LABEL_X = 124;
+constexpr int16_t MENU_VALUE_X = 312;
+constexpr int16_t MENU_ROW_H = 20;
 constexpr TetrominoType LOBBY_BG_TYPES[] = {
     TetrominoType::I,
     TetrominoType::O,
@@ -262,6 +287,41 @@ const char* gameModeLabel(GameMode mode) {
     }
 
     return "";
+}
+
+const char* themeLabel(ThemeId theme) {
+    switch (theme) {
+        case ThemeId::Gameboy: return "Gameboy";
+        case ThemeId::Nintendo: return "Nintendo";
+        case ThemeId::Modern: return "Modern";
+    }
+
+    return "";
+}
+
+const char* usernameEntryTitle(UsernameEntryMode mode) {
+    return mode == UsernameEntryMode::SignIn ? "Sign In" : "New User";
+}
+
+const char* usernameEntryMessageLabel(UsernameEntryMessage message) {
+    switch (message) {
+        case UsernameEntryMessage::None: return "";
+        case UsernameEntryMessage::UserExists: return "User already exists";
+        case UsernameEntryMessage::UserNotFound: return "User not found";
+        case UsernameEntryMessage::StorageFailed: return "Storage failed";
+    }
+
+    return "";
+}
+
+const char* userSettingsExitLabel(UserSettingsExitAction action) {
+    switch (action) {
+        case UserSettingsExitAction::JoinLobby: return "Join lobby?";
+        case UserSettingsExitAction::SignOut: return "Sign out?";
+        case UserSettingsExitAction::None: break;
+    }
+
+    return "Continue?";
 }
 
 const char* lobbyStatusLabel(LobbyPeerStatus status) {
@@ -870,6 +930,244 @@ void drawLobbyModal(const LobbyRenderState& lobby, const ThemePalette& palette) 
     }
 }
 
+int16_t menuRowY(uint8_t row) {
+    return MENU_PANEL_Y + 42 + row * MENU_ROW_H;
+}
+
+void drawMenuRowText(uint8_t row, const char* label, const char* value, bool selected, const ThemePalette& palette) {
+    const int16_t y = menuRowY(row);
+    const uint16_t color = selected ? palette.accent : palette.text;
+    tft.fillRect(MENU_PANEL_X + 2, y - 2, MENU_PANEL_W - 4, 18, palette.panel);
+    drawLeftBuiltinText(label, MENU_LABEL_X, y, color, palette.panel, 2);
+    if (value != nullptr && value[0] != '\0') {
+        drawLeftBuiltinText(value, MENU_VALUE_X, y, color, palette.panel, 2);
+    }
+}
+
+void drawWelcomeFull(const WelcomeRenderState& welcome) {
+    const ThemePalette palette = paletteFor(0);
+    drawLobbyBackground(palette);
+    tft.setTextColor(palette.text, palette.background);
+    tft.setTextDatum(TC_DATUM);
+    tft.drawString("Tetris Battle", tft.width() / 2, 24, 4);
+
+    drawCenteredPanel(MENU_PANEL_X, MENU_PANEL_Y, MENU_PANEL_W, 112, "Welcome", palette);
+    drawMenuRowText(0, "Sign in", "", welcome.selectedItem == WelcomeMenuItem::SignIn, palette);
+    drawMenuRowText(1, "New user", "", welcome.selectedItem == WelcomeMenuItem::NewUser, palette);
+}
+
+void renderWelcome(const WelcomeRenderState& welcome) {
+    const bool fullRedraw = !welcomeCache.valid ||
+                            !hasCurrentScreen ||
+                            currentScreen != RenderScreen::Welcome;
+    const ThemePalette palette = paletteFor(0);
+
+    if (fullRedraw) {
+        drawWelcomeFull(welcome);
+    } else if (welcomeCache.welcome.selectedItem != welcome.selectedItem) {
+        drawMenuRowText(0, "Sign in", "", welcome.selectedItem == WelcomeMenuItem::SignIn, palette);
+        drawMenuRowText(1, "New user", "", welcome.selectedItem == WelcomeMenuItem::NewUser, palette);
+    }
+
+    welcomeCache.welcome = welcome;
+    welcomeCache.valid = true;
+    currentScreen = RenderScreen::Welcome;
+    hasCurrentScreen = true;
+}
+
+void drawUsernameSlots(const UsernameEntryRenderState& entry, const ThemePalette& palette) {
+    const int16_t startX = 104;
+    const int16_t y = 142;
+    const uint8_t length = strnlen(entry.username, MAX_USERNAME_LEN);
+
+    tft.fillRect(92, y - 6, 296, 34, palette.panel);
+    for (uint8_t i = 0; i < MAX_USERNAME_LEN; ++i) {
+        const bool available = i <= length && i < MAX_USERNAME_LEN;
+        const bool selected = entry.selectedItem == UsernameEntryItem::Letters && entry.cursorIndex == i;
+        const bool active = selected && entry.slotActive;
+        const uint16_t border = active ? TFT_GREEN : (selected ? palette.accent : palette.grid);
+        const char c = i < length ? entry.username[i] : ' ';
+        const int16_t x = startX + i * 34;
+
+        tft.drawRect(x, y, 26, 26, available ? border : palette.grid);
+        tft.fillRect(x + 2, y + 2, 22, 22, palette.panel);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(available ? palette.text : palette.mutedText, palette.panel);
+        char text[2] = {c, '\0'};
+        tft.drawString(text, x + 13, y + 13, 2);
+    }
+}
+
+void drawUsernameEntryMessage(const UsernameEntryRenderState& entry, const ThemePalette& palette) {
+    tft.fillRect(110, 238, 260, 18, palette.panel);
+    const char* message = entry.busy ? "Working..." : usernameEntryMessageLabel(entry.message);
+    if (message[0] == '\0') {
+        return;
+    }
+    tft.setTextDatum(TC_DATUM);
+    tft.setTextColor(entry.message == UsernameEntryMessage::None ? palette.text : TFT_ORANGE, palette.panel);
+    tft.drawString(message, 240, 240, 2);
+}
+
+void drawUsernameEntryFull(const UsernameEntryRenderState& entry) {
+    const ThemePalette palette = paletteFor(0);
+    drawLobbyBackground(palette);
+    tft.setTextColor(palette.text, palette.background);
+    tft.setTextDatum(TC_DATUM);
+    tft.drawString(usernameEntryTitle(entry.mode), tft.width() / 2, 16, 4);
+
+    drawCenteredPanel(MENU_PANEL_X, MENU_PANEL_Y, MENU_PANEL_W, MENU_PANEL_H, "Username", palette);
+    drawUsernameSlots(entry, palette);
+    drawMenuRowText(3, "Continue", "", entry.selectedItem == UsernameEntryItem::Continue, palette);
+    drawMenuRowText(4, "Back", "", entry.selectedItem == UsernameEntryItem::Back, palette);
+    drawUsernameEntryMessage(entry, palette);
+}
+
+void renderUsernameEntry(const UsernameEntryRenderState& entry) {
+    const bool fullRedraw = !usernameEntryCache.valid ||
+                            !hasCurrentScreen ||
+                            currentScreen != RenderScreen::UsernameEntry ||
+                            usernameEntryCache.usernameEntry.mode != entry.mode;
+    const ThemePalette palette = paletteFor(0);
+
+    if (fullRedraw) {
+        drawUsernameEntryFull(entry);
+    } else {
+        const UsernameEntryRenderState& previous = usernameEntryCache.usernameEntry;
+        if (!stringsEqual(previous.username, entry.username) ||
+            previous.cursorIndex != entry.cursorIndex ||
+            previous.slotActive != entry.slotActive ||
+            previous.selectedItem != entry.selectedItem) {
+            drawUsernameSlots(entry, palette);
+        }
+
+        if (previous.selectedItem != entry.selectedItem) {
+            drawMenuRowText(3, "Continue", "", entry.selectedItem == UsernameEntryItem::Continue, palette);
+            drawMenuRowText(4, "Back", "", entry.selectedItem == UsernameEntryItem::Back, palette);
+        }
+
+        if (previous.message != entry.message || previous.busy != entry.busy) {
+            drawUsernameEntryMessage(entry, palette);
+        }
+    }
+
+    usernameEntryCache.usernameEntry = entry;
+    usernameEntryCache.valid = true;
+    currentScreen = RenderScreen::UsernameEntry;
+    hasCurrentScreen = true;
+}
+
+void drawUserSettingsRow(const UserSettingsRenderState& state, uint8_t row, const ThemePalette& palette) {
+    const char* labels[] = {
+        "Theme",
+        "Hold piece",
+        "Ghost piece",
+        "Next pieces",
+        "Save settings",
+        "Join lobby",
+        "Sign out"
+    };
+
+    const char* values[] = {
+        themeLabel(state.settings.theme),
+        state.settings.holdEnabled ? "On" : "Off",
+        state.settings.ghostEnabled ? "On" : "Off",
+        "",
+        state.busy ? "Saving..." : (state.dirty ? "Needed" : "Saved"),
+        "",
+        ""
+    };
+
+    const bool selected = static_cast<uint8_t>(state.selectedItem) == row &&
+                          state.modalState == ModalState::None;
+    drawMenuRowText(row, labels[row], values[row], selected, palette);
+
+    if (row == 3) {
+        const int16_t y = menuRowY(row);
+        tft.setTextDatum(TL_DATUM);
+        tft.setTextColor(selected ? palette.accent : palette.text, palette.panel);
+        tft.drawNumber(state.settings.nextPreviewCount, MENU_VALUE_X, y, 2);
+    }
+}
+
+bool userSettingsRowValueChanged(const UserSettingsRenderState& previous, const UserSettingsRenderState& current, uint8_t row) {
+    switch (row) {
+        case 0: return previous.settings.theme != current.settings.theme;
+        case 1: return previous.settings.holdEnabled != current.settings.holdEnabled;
+        case 2: return previous.settings.ghostEnabled != current.settings.ghostEnabled;
+        case 3: return previous.settings.nextPreviewCount != current.settings.nextPreviewCount;
+        case 4: return previous.dirty != current.dirty || previous.busy != current.busy;
+        default: return false;
+    }
+}
+
+void drawUserSettingsModal(const UserSettingsRenderState& state, const ThemePalette& palette) {
+    if (state.modalState != ModalState::UnsavedSettings) {
+        return;
+    }
+
+    drawCenteredPanel(104, 94, 272, 132, userSettingsExitLabel(state.pendingExitAction), palette);
+    drawCenteredBodyText("Unsaved settings", 240, 144, palette);
+    drawCenteredBodyText("Continue without saving?", 240, 166, palette);
+    drawHorizontalChoice(
+        240,
+        198,
+        "Continue",
+        state.confirmContinueSelected,
+        "Cancel",
+        !state.confirmContinueSelected,
+        palette
+    );
+}
+
+void drawUserSettingsFull(const UserSettingsRenderState& state) {
+    const ThemePalette palette = paletteFor(0);
+    drawLobbyBackground(palette);
+    tft.setTextColor(palette.text, palette.background);
+    tft.setTextDatum(TC_DATUM);
+    tft.drawString("User Settings", tft.width() / 2, 10, 4);
+    drawCenteredPanel(MENU_PANEL_X, 64, MENU_PANEL_W, 238, state.username, palette);
+
+    for (uint8_t row = 0; row < 7; ++row) {
+        drawUserSettingsRow(state, row, palette);
+    }
+
+    drawUserSettingsModal(state, palette);
+}
+
+void renderUserSettings(const UserSettingsRenderState& state) {
+    const bool modalChanged = userSettingsCache.valid &&
+                              userSettingsCache.userSettings.modalState != state.modalState;
+    const bool fullRedraw = !userSettingsCache.valid ||
+                            !hasCurrentScreen ||
+                            currentScreen != RenderScreen::UserSettings ||
+                            modalChanged;
+    const ThemePalette palette = paletteFor(0);
+
+    if (fullRedraw) {
+        drawUserSettingsFull(state);
+    } else {
+        const UserSettingsRenderState& previous = userSettingsCache.userSettings;
+        for (uint8_t row = 0; row < 7; ++row) {
+            const bool selectionChanged = previous.selectedItem == static_cast<UserSettingsMenuItem>(row) ||
+                                          state.selectedItem == static_cast<UserSettingsMenuItem>(row);
+            if (selectionChanged || userSettingsRowValueChanged(previous, state, row)) {
+                drawUserSettingsRow(state, row, palette);
+            }
+        }
+
+        if (previous.confirmContinueSelected != state.confirmContinueSelected ||
+            previous.pendingExitAction != state.pendingExitAction) {
+            drawUserSettingsModal(state, palette);
+        }
+    }
+
+    userSettingsCache.userSettings = state;
+    userSettingsCache.valid = true;
+    currentScreen = RenderScreen::UserSettings;
+    hasCurrentScreen = true;
+}
+
 void drawLobbyFull(const LobbyRenderState& lobby) {
     const ThemePalette palette = paletteFor(0);
     drawLobbyBackground(palette);
@@ -1056,6 +1354,9 @@ void configure(const DisplayRenderConfig& config) {
     renderConfig.nextPreviewCount = min(renderConfig.nextPreviewCount, MAX_NEXT_PIECES);
     gameplayCache.valid = false;
     lobbyCache.valid = false;
+    welcomeCache.valid = false;
+    usernameEntryCache.valid = false;
+    userSettingsCache.valid = false;
     hasCurrentScreen = false;
 }
 
@@ -1065,6 +1366,15 @@ void renderScreen(const ScreenRenderState& screen) {
     }
 
     switch (screen.screen) {
+        case RenderScreen::Welcome:
+            renderWelcome(screen.payload.welcome);
+            break;
+        case RenderScreen::UsernameEntry:
+            renderUsernameEntry(screen.payload.usernameEntry);
+            break;
+        case RenderScreen::UserSettings:
+            renderUserSettings(screen.payload.userSettings);
+            break;
         case RenderScreen::Lobby:
             renderLobby(screen.payload.lobby);
             break;

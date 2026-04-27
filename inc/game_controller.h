@@ -11,9 +11,11 @@ public:
     void begin();
     bool handleInputEvent(const InputEvent& event);
     bool handleRemoteEvent(const RemoteEvent& event);
+    bool handleStorageResponse(const StorageResponse& response);
     bool tick(uint32_t nowMs);
     bool popOutboundPacket(NetPacket& packet);
     bool popMusicEvent(MusicEvent& event);
+    bool consumeDisplayConfigDirty();
 
     void makeDisplayConfigEvent(RenderEvent& event) const;
     void makeScreenRenderEvent(RenderEvent& event) const;
@@ -47,6 +49,9 @@ private:
     };
 
     bool handleGameplayInput(const InputEvent& event);
+    bool handleWelcomeInput(const InputEvent& event);
+    bool handleUsernameEntryInput(const InputEvent& event);
+    bool handleUserSettingsInput(const InputEvent& event);
     bool handleLobbyInput(const InputEvent& event);
     bool handlePausedInput(const InputEvent& event);
     bool handleGameOverInput(const InputEvent& event);
@@ -78,7 +83,14 @@ private:
     void queuePostGameActionReplyPacket(const PostGameActionState& request, bool accepted);
     void queueGarbagePacket(const GameEngine::GarbageAttack& garbage);
     void queueGameOverPacket();
+    void queueUserLoad(const char* username);
+    void queueUserSave(const UserSettings& settings);
 
+    void enterWelcome();
+    void enterUsernameEntry(UsernameEntryMode mode);
+    void enterUserSettings(const UserSettings& settings);
+    void joinLobbyFromSettings();
+    void signOutFromSettings();
     void beginGame(uint32_t seed, const MatchSettings& settings);
     void returnToLobby();
     void enterPaused(uint8_t pauseId);
@@ -90,16 +102,38 @@ private:
     bool isNavigationEvent(const InputEvent& event) const;
     int8_t navigationDelta(const InputEvent& event) const;
     bool isSelectEvent(const InputEvent& event) const;
+    bool userSettingsDirty() const;
+    bool applyUsernameSlotDelta(int8_t delta);
+    void normalizeUsernameCursorAfterEdit();
+    void setUsernameDraftFromCurrentLength();
+    void resetStoragePending();
     bool mapsToAction(PhysicalButton button, GameEngine::Action& action) const;
     bool mapsToRepeatAction(PhysicalButton button, GameEngine::Action& action) const;
 
     UserSettings userSettings_;
+    UserSettings draftUserSettings_;
     MatchSettings matchSettings_;
     GameEngine::Engine engine_;
 
     GamePhase phase_;
     uint16_t localDeviceId_;
     bool transportReady_;
+
+    WelcomeMenuItem welcomeSelection_;
+    UsernameEntryMode usernameEntryMode_;
+    UsernameEntryItem usernameEntrySelection_;
+    UsernameEntryMessage usernameEntryMessage_;
+    char usernameDraft_[MAX_USERNAME_LEN + 1];
+    uint8_t usernameCursorIndex_;
+    bool usernameSlotActive_;
+    bool storageBusy_;
+    bool displayConfigDirty_;
+    StorageOperation pendingStorageOperation_;
+    UsernameEntryMode pendingStorageMode_;
+    UserSettings pendingSaveSettings_;
+    UserSettingsMenuItem userSettingsSelection_;
+    UserSettingsExitAction pendingUserSettingsExit_;
+    bool userSettingsConfirmContinueSelected_;
 
     bool remoteOnline_;
     uint16_t remoteDeviceId_;

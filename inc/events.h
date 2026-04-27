@@ -154,6 +154,9 @@ struct RemoteEvent {
 // GameTask -> RenderTask
 
 enum class RenderScreen : uint8_t {
+    Welcome,
+    UsernameEntry,
+    UserSettings,
     Lobby,
     Gameplay,
     Paused,
@@ -192,6 +195,31 @@ struct DisplayRenderConfig {
     bool holdEnabled;
     bool ghostEnabled;
     uint8_t nextPreviewCount;
+};
+
+struct WelcomeRenderState {
+    WelcomeMenuItem selectedItem;
+};
+
+struct UsernameEntryRenderState {
+    UsernameEntryMode mode;
+    char username[MAX_USERNAME_LEN + 1];
+    uint8_t cursorIndex;
+    bool slotActive;
+    UsernameEntryItem selectedItem;
+    UsernameEntryMessage message;
+    bool busy;
+};
+
+struct UserSettingsRenderState {
+    char username[MAX_USERNAME_LEN + 1];
+    UserSettings settings;
+    UserSettingsMenuItem selectedItem;
+    ModalState modalState;
+    UserSettingsExitAction pendingExitAction;
+    bool confirmContinueSelected;
+    bool dirty;
+    bool busy;
 };
 
 struct LobbyRenderState {
@@ -235,6 +263,9 @@ struct GameOverRenderState {
 struct ScreenRenderState {
     RenderScreen screen;
     union {
+        WelcomeRenderState welcome;
+        UsernameEntryRenderState usernameEntry;
+        UserSettingsRenderState userSettings;
         LobbyRenderState lobby;
         GameplayRenderState gameplay;
         PauseRenderState pause;
@@ -254,8 +285,7 @@ struct RenderEvent {
 // GameTask <-> StorageTask
 
 enum class StorageKey : uint8_t {
-    UserSettings,
-    MatchSettings
+    UserSettings
 };
 
 enum class StorageOperation : uint8_t {
@@ -270,7 +300,6 @@ struct StorageRequest {
     char remoteUsername[MAX_USERNAME_LEN + 1];
     union {
         UserSettings userSettings;
-        MatchSettings matchSettings;
     } payload;
 };
 
@@ -285,6 +314,5 @@ struct StorageResponse {
     StorageKey key;
     union {
         UserSettings userSettings;
-        MatchSettings matchSettings;
     } payload;
 };
