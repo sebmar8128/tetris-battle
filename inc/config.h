@@ -44,9 +44,12 @@ static constexpr uint32_t WIRELESS_RX_FRAME_CAPACITY        = 16;
 
 // Input timing
 static constexpr TickType_t INPUT_POLL_PERIOD_TICKS   = pdMS_TO_TICKS(5);
+static constexpr TickType_t INPUT_STARTUP_SETTLE_TICKS = pdMS_TO_TICKS(500);
 static constexpr uint32_t INPUT_DEBOUNCE_MS           = 25;
 static constexpr uint32_t INPUT_HOLD_DETECT_MS        = 250;
 static constexpr uint32_t INPUT_REPEAT_PERIOD_MS      = 40;
+static constexpr uint32_t INPUT_CENTER_RESET_HOLD_MS  = 3000;
+static constexpr TickType_t INPUT_RESET_DELAY_TICKS   = pdMS_TO_TICKS(50);
 
 // Button GPIOs. Assumption is INPUT_PULLUP.
 static constexpr int8_t PIN_BUTTON_CENTER = 15;

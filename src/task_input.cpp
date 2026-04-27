@@ -19,6 +19,12 @@ struct ButtonState {
     uint32_t nextRepeatMs;
 };
 
+struct CenterResetState {
+    bool wasPressed;
+    bool triggered;
+    uint32_t pressedSinceMs;
+};
+
 constexpr ButtonConfig BUTTONS[] = {
     {PhysicalButton::LdUp,    PIN_BUTTON_LD_UP},
     {PhysicalButton::LdLeft,  PIN_BUTTON_LD_LEFT},
@@ -57,6 +63,20 @@ void initButtons() {
     }
 }
 
+void primeButtonStates(ButtonState buttonStates[BUTTON_COUNT], uint32_t nowMs) {
+    for (size_t i = 0; i < BUTTON_COUNT; ++i) {
+        const bool pressed = readPressed(BUTTONS[i].pin);
+        buttonStates[i] = {
+            pressed,
+            pressed,
+            nowMs,
+            pressed && canPhysicallyRepeat(BUTTONS[i].button)
+                ? nowMs + INPUT_HOLD_DETECT_MS
+                : 0
+        };
+    }
+}
+
 void pollButton(const ButtonConfig& config, ButtonState& state, uint32_t nowMs) {
     const bool rawPressed = readPressed(config.pin);
 
@@ -89,14 +109,39 @@ void pollButton(const ButtonConfig& config, ButtonState& state, uint32_t nowMs) 
     }
 }
 
+void pollCenterSoftwareReset(const ButtonState& centerState, CenterResetState& resetState, uint32_t nowMs) {
+    if (!centerState.debouncedPressed) {
+        resetState.wasPressed = false;
+        resetState.triggered = false;
+        resetState.pressedSinceMs = 0;
+        return;
+    }
+
+    if (!resetState.wasPressed) {
+        resetState.wasPressed = true;
+        resetState.triggered = false;
+        resetState.pressedSinceMs = nowMs;
+        return;
+    }
+
+    if (!resetState.triggered && (nowMs - resetState.pressedSinceMs) >= INPUT_CENTER_RESET_HOLD_MS) {
+        resetState.triggered = true;
+        vTaskDelay(INPUT_RESET_DELAY_TICKS);
+        ESP.restart();
+    }
+}
+
 }  // namespace
 
 void inputTask(void* pvParameters) {
     (void)pvParameters;
 
     initButtons();
+    vTaskDelay(INPUT_STARTUP_SETTLE_TICKS);
 
     ButtonState buttonStates[BUTTON_COUNT] = {};
+    primeButtonStates(buttonStates, millis());
+    CenterResetState centerResetState = {};
     TickType_t lastWakeTick = xTaskGetTickCount();
 
     while(true) {
@@ -105,6 +150,7 @@ void inputTask(void* pvParameters) {
         for (size_t i = 0; i < BUTTON_COUNT; ++i) {
             pollButton(BUTTONS[i], buttonStates[i], nowMs);
         }
+        pollCenterSoftwareReset(buttonStates[BUTTON_COUNT - 1], centerResetState, nowMs);
 
         vTaskDelayUntil(&lastWakeTick, INPUT_POLL_PERIOD_TICKS);
     }
