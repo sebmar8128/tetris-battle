@@ -7,8 +7,9 @@
 
 namespace {
 
+// 0x54425553 = TBUS (Tetris Battle User Settings)
 constexpr char STORAGE_NAMESPACE[] = "tb_users";
-constexpr uint32_t USER_RECORD_MAGIC = 0x54425553; // TBUS
+constexpr uint32_t USER_RECORD_MAGIC = 0x54425553;
 constexpr uint8_t USER_RECORD_VERSION = 1;
 
 struct UserSettingsRecord {

@@ -12,7 +12,7 @@ constexpr uint16_t BUZZER_LEDC_MAX_DUTY = (1U << BUZZER_LEDC_RESOLUTION_BITS) - 
 constexpr uint16_t BUZZER_LEDC_DUTY = (BUZZER_LEDC_MAX_DUTY * 2U) / 100U;
 constexpr uint32_t BUZZER_INITIAL_FREQ_HZ = 440;
 constexpr TickType_t MUSIC_COMMAND_POLL_TICKS = pdMS_TO_TICKS(5);
-constexpr TickType_t MUSIC_REPEAT_DELAY_TICKS = pdMS_TO_TICKS(2000);
+constexpr TickType_t MUSIC_REPEAT_DELAY_TICKS = pdMS_TO_TICKS(1000);
 
 uint32_t noteDurationMs(const MusicTrackDef& track, NoteLength length) {
     const uint32_t sixteenthUnits = static_cast<uint8_t>(length);
